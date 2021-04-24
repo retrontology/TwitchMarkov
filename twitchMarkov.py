@@ -22,7 +22,7 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.state_size = config['markov']['state_size']
         self.clear_logs_after = config['markov']['clear_logs_after']
         self.send_messages = config['markov']['send_messages']
-        self.generate_on = config['markov']['send_messages']
+        self.generate_on = config['markov']['generate_on']
         self.times_to_try = config['markov']['times_to_try']
         self.unique = config['markov']['unique']
         self.cull_over = config['markov']['cull_over']
@@ -30,6 +30,14 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.blacklist_file = config['markov']['blacklist_file']
         self.blacklist_words = self.load_blacklist(self.blacklist_file)
         self.last_cull = datetime.datetime.now()
+        self.username = config['twitch']['username']
+        self.client_id = config['twitch']['client_id']
+        self.client_secret = config['twitch']['client_secret']
+        self.twitch_setup()
+        self.irc_server = config['twitch']['irc']['server']
+        self.irc_port = config['twitch']['irc']['port']
+        irc.bot.SingleServerIRCBot.__init__(self, [(self.irc_server, self.irc_port, 'oauth:'+self.token)], self.username, self.username)
+
     
     def twitch_setup(self):
         self.logger.info(f'Setting up Twitch API client...')
