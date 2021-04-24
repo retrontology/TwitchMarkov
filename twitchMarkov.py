@@ -1,3 +1,6 @@
+from twitchAPI.twitch import Twitch
+from twitchAPI.oauth import UserAuthenticator
+from twitchAPI.types import AuthScope
 from emoji import demojize
 import datetime
 import socket
@@ -5,11 +8,13 @@ import markovify
 import re
 import traceback
 import irc.bot
+import logging
 
 
 class markovBot(irc.bot.SingleServerIRCBot):
 
     def __init__(self, config):
+        self.logger = logging.getLogger("markovBot")
         self.percent_unique = config['markov']['percent_unique']
         self.allow_mentions = config['markov']['allow_mentions']
         self.logfile = config['markov']['log_file']
@@ -24,7 +29,14 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.time_to_cull = config['markov']['time_to_cull']
         self.blacklist_file = config['markov']['blacklist_file']
         self.blacklist_words = self.load_blacklist(self.blacklist_file)
-
+        self.last_cull = datetime.datetime.now()
+    
+    def twitch_setup(self):
+        self.logger.info(f'Setting up Twitch API client...')
+        self.twitch = Twitch(self.client_id, self.client_secret)
+        self.twitch.user_auth_refresh_callback = self.oauth_user_refresh
+        self.twitch.authenticate_app([])
+        self.logger.info(f'Twitch API client set up!')
 
     def listMeetsThresholdToSave(self, part, whole):
         pF = float(len(part))
@@ -91,22 +103,18 @@ class markovBot(irc.bot.SingleServerIRCBot):
             self.phrases_list = [testMess]
         return testMess
 
-    def generateAndSendMessage(self, sock, channel):
+    def generateAndSendMessage(self, channel):
         if self.send_messages:
             markoved = self.generateMessage()
             if markoved != None:
-                self.sendMessage(sock, channel, markoved)
+                self.sendMessage(channel, markoved)
             else:
                 print("Could not generate.")
 
-    def sendMessage(self, sock, channel, message):
-        if self.send_messages:
-            sock.send("PRIVMSG #{} :{}\r\n".format(channel, message).encode("utf-8"))
-
-    def sendMaintenance(self, sock, channel, message):
+    def sendMaintenance(self, channel, message):
         sock.send("PRIVMSG #{} :{}\r\n".format(channel, Conf.SELF_PREFIX + message).encode("utf-8"))
 
-    def handleAdminMessage(self, username, channel, sock):
+    def handleAdminMessage(self, username, channel):
         if username == channel or username == Conf.owner or username in Conf.mods:
             # Log clearing after message.
             if message == Conf.CMD_CLEAR:
@@ -199,7 +207,13 @@ class markovBot(irc.bot.SingleServerIRCBot):
             last_cull = datetime.datetime.now()
         return last_cull
 
-def main():
+    def start(self):
+        """Start the bot."""
+        self._connect()
+        super(irc.bot.SingleServerIRCBot, self).start()
+
+
+def old_main():
     # PROGRAM HERE
 
     last_cull = datetime.datetime.now()
@@ -220,61 +234,61 @@ def main():
 
         print("Connected", Conf.nickname, ".")
 
-        loop(sock)
+        # Main loop
+        while True:
+            try:
+                # Receive socket message.
+                resp = sock.recv(2048).decode('utf-8')
 
-def loop(sock):
-    # Main loop
-    while True:
-        try:
-            # Receive socket message.
-            resp = sock.recv(2048).decode('utf-8')
+                # Keepalive code.
+                if resp.startswith('PING'):
+                    sock.send("PONG\n".encode('utf-8'))
+                # Actual message that isn't empty.
+                elif len(resp) > 0:
+                    try:
+                        msg = demojize(resp)
+                        # Break out username / channel / message.
+                        regex = re.search(r':(.*)\!.*@.*\.tmi\.twitch\.tv PRIVMSG #(.*) :(.*)', msg)
+                        # If we have a matching message, do something.
+                        if regex != None:
+                            # The variables we need.
+                            username, channel, message = regex.groups()
+                            message = message.strip()
 
-            # Keepalive code.
-            if resp.startswith('PING'):
-                sock.send("PONG\n".encode('utf-8'))
-            # Actual message that isn't empty.
-            elif len(resp) > 0:
-                try:
-                    msg = demojize(resp)
-                    # Break out username / channel / message.
-                    regex = re.search(r':(.*)\!.*@.*\.tmi\.twitch\.tv PRIVMSG #(.*) :(.*)', msg)
-                    # If we have a matching message, do something.
-                    if regex != None:
-                        # The variables we need.
-                        username, channel, message = regex.groups()
-                        message = message.strip()
+                            # Handle ignored users.
+                            if isUserIgnored(username):
+                                continue
 
-                        # Handle ignored users.
-                        if isUserIgnored(username):
-                            continue
+                            # Broadcaster saying something.
+                            if handleAdminMessage(username, channel, sock):
+                                continue
 
-                        # Broadcaster saying something.
-                        if handleAdminMessage(username, channel, sock):
-                            continue
+                            # Validate and print message to the log.
+                            if not writeMessage(message):
+                                continue
 
-                        # Validate and print message to the log.
-                        if not writeMessage(message):
-                            continue
+                            # At this point, it's not an admin message, and it's a successful, valid entry.
 
-                        # At this point, it's not an admin message, and it's a successful, valid entry.
+                            # Increase messages logged.
+                            messageCount += 1
 
-                        # Increase messages logged.
-                        messageCount += 1
+                            # Generate Markov
+                            if (messageCount % self.generate_on) == 0:
+                                generateAndSendMessage(sock, channel)
+                                last_cull = shouldCull(last_cull)
+                                messageCount = 0
+                    except Exception as e:
+                        print("Inner")
+                        traceback.print_exc() 
+                        print(e)
+            except Exception as e:
+                print("Outer")
+                traceback.print_exc() 
+                print(e)
+                break
 
-                        # Generate Markov
-                        if (messageCount % self.generate_on) == 0:
-                            generateAndSendMessage(sock, channel)
-                            last_cull = shouldCull(last_cull)
-                            messageCount = 0
-                except Exception as e:
-                    print("Inner")
-                    traceback.print_exc() 
-                    print(e)
-        except Exception as e:
-            print("Outer")
-            traceback.print_exc() 
-            print(e)
-            break
+def main():
+    pass
 
 if __name__ == '__main__':
     main()
