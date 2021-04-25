@@ -1,6 +1,6 @@
 import yaml
 
-class vodloader_config(dict):
+class markovConfig(dict):
     
     def __init__(self, filename):
         self.load(filename)
