@@ -1,4 +1,5 @@
 from markovConfig import markovConfig
+from channelHandler import channelHandler
 from twitchAPI.twitch import Twitch
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope
@@ -20,7 +21,6 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.logger = logging.getLogger("markovBot.bot")
         self.percent_unique = config['markov']['percent_unique']
         self.allow_mentions = config['markov']['allow_mentions']
-        self.logfile = config['markov']['log_file']
         self.phrases_list = config['markov']['phrases_list']
         self.state_size = config['markov']['state_size']
         self.clear_logs_after = config['markov']['clear_logs_after']
@@ -39,9 +39,19 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.twitch_setup()
         self.irc_server = config['twitch']['irc']['server']
         self.irc_port = config['twitch']['irc']['port']
-        self.messageCount = 0
+        self.channel_handlers = []
+        for channel in config['twitch']['channels']:
+            self.channel_handlers.append(channelHandler(channel, config['twitch']['channels'][channel], self))
         irc.bot.SingleServerIRCBot.__init__(self, [(self.irc_server, self.irc_port, 'oauth:'+self.token)], self.username, self.username)
 
+    def on_welcome(self, c, e):
+        self.logger.info(f'Joining #{self.channel}...')
+        c.cap('REQ', ':twitch.tv/membership')
+        c.cap('REQ', ':twitch.tv/tags')
+        c.cap('REQ', ':twitch.tv/commands')
+        for channel in self.channel_handlers:
+            c.join('#' + channel.channel)
+    
     def load_blacklist(self, blacklist_file):
         with open(blacklist_file, 'r') as f:
             words = [line.rstrip('\n') for line in f]
@@ -101,68 +111,7 @@ class markovBot(irc.bot.SingleServerIRCBot):
             return False
         uniqueness = (pF/wF) * float(100)
         return (uniqueness >= self.percent_unique)
-
-    def filterMessage(self, message):
-        if self.checkBlacklisted(message):
-            return None
-        # Remove links
-        # TODO: Fix
-        message = re.sub(r"http\S+", "", message)
-        # Remove mentions
-        if self.allow_mentions == False:
-            message = re.sub(r"@\S+", "", message)
-        # Remove just repeated messages.
-        words = message.split()
-        # Make list unique
-        uniqueWords = list(set(words))
-        if not self.listMeetsThresholdToSave(uniqueWords, words):
-            return None
-        # Space filtering
-        message = re.sub(r" +", " ", message)
-        message = message.strip()
-        return message
-
-    def writeMessage(self, message):
-        message = self.filterMessage(message)
-        if message != None and message != "":
-            if messageCount == 0 and self.clear_logs_after:
-                f = open(self.logfile, "w", encoding="utf-8")
-            else:
-                f = open(self.logfile, "a", encoding="utf-8")
-            f.write(message + "\n")
-            f.close()
-            return True
-        return False
-
-    def generateMessage(self):
-        with open(self.logfile, encoding="utf-8") as f:
-            text = f.read()
-        text_model = markovify.NewlineText(text, state_size=self.state_size)
-        testMess = None
-        if self.unique and (len(self.phrases_list) > 0):
-            foundUnique = False
-            tries = 0
-            while not foundUnique and tries < 20:
-                testMess = text_model.make_sentence(tries=self.times_to_try)
-                if not (testMess in self.phrases_list):
-                    foundUnique = True
-                tries += 1
-        else:
-            testMess = text_model.make_sentence(tries=self.times_to_try)
-        if not (testMess is None):
-            self.phrases_list.append(testMess)
-        else:
-            self.phrases_list = [testMess]
-        return testMess
-
-    def generateAndSendMessage(self, channel):
-        if self.send_messages:
-            markoved = self.generateMessage()
-            if markoved != None:
-                self.sendMessage(channel, markoved)
-            else:
-                print("Could not generate.")
-
+    
     def sendMaintenance(self, channel, message):
         sock.send("PRIVMSG #{} :{}\r\n".format(channel, Conf.SELF_PREFIX + message).encode("utf-8"))
 

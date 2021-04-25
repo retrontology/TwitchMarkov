@@ -3,10 +3,10 @@ twitch:
   client_secret: ''
   username: ''
   channels:
-    - ''
-  ignored_users:
-    - 'nightbot'
-    - 'streamlabs'
+    MiltonTPike1:
+      ignored_users:
+        - 'nightbot'
+        - 'streamlabs'
   irc:
     server: 'irc.chat.twitch.tv'
     port: 6667
@@ -14,7 +14,6 @@ markov:
   generate_on: 35
   percent_unique: 50.0
   allow_mentions: True
-  log_file: ''
   phrases_list: 
     - ''
   state_size: 2
