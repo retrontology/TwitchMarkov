@@ -18,10 +18,13 @@ class channelHandler():
         self.send_messages = config['send_messages']
         self.unique = config['unique']
         self.generate_on = config['generate_on']
+        self.ignored_users = [x.lower() for x in config['ignored_users']]
     
     def on_pubmsg(self, c, e):
         msg = self.parse_msg_event(e)
-        if (msg['mod'] or msg['broadcaster']) and msg['content'][:1] == '!':
+        if msg['name'].lower() in self.ignored_users:
+            pass
+        elif (msg['mod'] or msg['broadcaster']) and msg['content'][:1] == '!':
             self.handleAdminMessage(msg)
         else:
             pass
