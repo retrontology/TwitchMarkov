@@ -56,6 +56,7 @@ class channelHandler():
         return out
                 
     def sendMessage(self, message):
+        self.logger.info(f'Sending: {message}')
         self.parent.connection.privmsg('#' + self.channel, message)
 
     def getMessageFile(self):
@@ -87,12 +88,13 @@ class channelHandler():
         return testMess
 
     def generateAndSendMessage(self):
-        if self.send_messages:
-            markoved = self.generateMessage()
-            if markoved != None:
+        markoved = self.generateMessage()
+        if markoved != None:
+            self.logger.info(f'Generated: {markoved}')
+            if self.send_messages:
                 self.sendMessage(markoved)
-            else:
-                self.logger.error("Could not generate.")
+        else:
+            self.logger.error("Could not generate.")
 
     def writeMessage(self, message):
         message = self.filterMessage(message)
