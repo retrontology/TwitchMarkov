@@ -40,16 +40,22 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.irc_port = config['twitch']['irc']['port']
         self.channel_handlers = []
         for channel in config['twitch']['channels']:
-            self.channel_handlers.append(channelHandler(channel, config['twitch']['channels'][channel], self))
+            self.channel_handlers.append(channelHandler(channel, config['twitch']['channels'][channel].lower(), self))
         irc.bot.SingleServerIRCBot.__init__(self, [(self.irc_server, self.irc_port, 'oauth:'+self.token)], self.username, self.username)
 
     def on_welcome(self, c, e):
-        self.logger.info(f'Joining #{self.channel}...')
         c.cap('REQ', ':twitch.tv/membership')
         c.cap('REQ', ':twitch.tv/tags')
         c.cap('REQ', ':twitch.tv/commands')
         for channel in self.channel_handlers:
             c.join('#' + channel.channel)
+
+    def on_join(self, c, e):
+        self.logger.info(f'Joined {e.target}!')
+
+    def on_pubmsg(self, c, e):
+        self.channel_handlers[e.target[1:]].on_pubmsg(c, e)
+
     
     def load_blacklist(self, blacklist_file):
         with open(blacklist_file, 'r') as f:
@@ -79,14 +85,14 @@ class markovBot(irc.bot.SingleServerIRCBot):
         pickle_file = self.get_oauth_file()
         with open(pickle_file, 'wb') as f:
             pickle.dump((self.token, self.refresh_token), f)
-        self.logger.info(f'OAuth Token has been saved')
+        self.logger.debug(f'OAuth Token has been saved')
 
     def load_oauth_token(self):
         pickle_file = self.get_oauth_file()
         if os.path.exists(pickle_file):
             with open(pickle_file, 'rb') as f:
                 out = pickle.load(f)
-            self.logger.info(f'OAuth Token has been loaded')
+            self.logger.debug(f'OAuth Token has been loaded')
             return out
         else: return None
 
@@ -97,10 +103,11 @@ class markovBot(irc.bot.SingleServerIRCBot):
         return pickle
     
     def oauth_user_refresh(self, token, refresh_token):
-        #self.logger.info(f'Refreshing OAuth Token')
+        self.logger.debug(f'Refreshing OAuth Token')
         self.token = token
         self.refresh_token = refresh_token
         irc.bot.SingleServerIRCBot.__init__(self, [(self.irc_server, self.irc_port, 'oauth:'+self.token)], self.username, self.username)
+        self._connect()
         self.save_oauth_token()
 
     def listMeetsThresholdToSave(self, part, whole):
@@ -117,11 +124,6 @@ class markovBot(irc.bot.SingleServerIRCBot):
             if re.search(r"\b" + i, message, re.IGNORECASE):
                 return True
         return False
-
-    def start(self):
-        """Start the bot."""
-        self._connect()
-        super(irc.bot.SingleServerIRCBot, self).start()
 
 
 def old_main():

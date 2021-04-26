@@ -2,17 +2,65 @@ import os
 import markovify
 import re
 import datetime
+import logging
 
 class channelHandler():
 
     def __init__(self, channel, config, parent):
+        self.logger = logging.getLogger(f'markovBot.bot.{channel}')
         self.channel = channel
         self.parent = parent
+        self.user_id = self.parent.twitch.get_users(logins=[channel.lower()])['data'][0]['id']
         self.messageCount = 0
         self.message_file = self.getMessageFile()
         self.last_cull = datetime.datetime.now()
-
     
+    def on_pubmsg(self, c, e):
+        msg = self.parse_msg_event(e)
+        if msg['mod'] or msg['broadcaster'] and e.arguments[0][:1] == '!':
+            cmd = e.arguments[0].split(' ')[0][1:].lower()
+            if cmd == 'clear':
+                if self.parent.clear_logs_after == True:
+                    self.parent.clear_logs_after = False
+                    self.sendMaintenance("No longer clearing memory after message! betch200IQ")
+                else:
+                    self.parent.clear_logs_after = True
+                    self.sendMaintenance("Clearing memory after every message! FeelsDankMan")
+            elif cmd == 'wipe':
+                pass
+            elif cmd == 'toggle':
+                pass
+            elif cmd == 'unique':
+                pass
+            elif cmd == 'setafter':
+                pass
+            elif cmd == 'isalive':
+                pass
+            elif cmd == 'kill':
+                pass
+        else:
+            pass
+        if e.arguments[0].lower().find(self.username.lower()) != -1:
+            self.logger.info(f'{name}: {e.arguments[0]}')
+    
+    def parse_msg_event(self, event):
+        out = {}
+        for tag in event.tags:
+            if tag['key'] == "display-name":
+                out['name'] = tag['value']
+            elif tag['key'] == "user-id":
+                out['user_id'] = tag['value']
+            elif tag['key'] == "tmi-sent-ts":
+                out['time'] = datetime.datetime.fromtimestamp(float(tag['value']))
+            elif tag['key'] == 'badges':
+                out['broadcaster'] = tag['value'] == 'broadcaster/1'
+            elif tag['key'] == tag['user-type']:
+                out['mod'] = tag['value'] == '1'
+            elif tag['key'] == tag['subscriber']:
+                out['subscriber'] = tag['value'] == '1'
+        return out
+                
+
     def sendMessage(self):
         pass
 
@@ -114,12 +162,12 @@ class channelHandler():
         if username == channel or username == Conf.owner or username in Conf.mods:
             # Log clearing after message.
             if message == Conf.CMD_CLEAR:
-                if self.clear_logs_after == True:
-                    self.clear_logs_after = False
-                    self.sendMaintenance(sock, channel, "No longer clearing memory after message! betch200IQ")
+                if self.parent.clear_logs_after == True:
+                    self.parent.clear_logs_after = False
+                    self.sendMaintenance("No longer clearing memory after message! betch200IQ")
                 else:
-                    self.clear_logs_after = True
-                    self.sendMaintenance(sock, channel, "Clearing memory after every message! FeelsDankMan")
+                    self.parent.clear_logs_after = True
+                    self.sendMaintenance("Clearing memory after every message! FeelsDankMan")
                 return True
             # Wipe logs
             if message == Conf.CMD_WIPE:
