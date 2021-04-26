@@ -18,12 +18,12 @@ import os
 class markovBot(irc.bot.SingleServerIRCBot):
 
     def __init__(self, config):
+        self.config = config
         self.logger = logging.getLogger("markovBot.bot")
         self.percent_unique = config['markov']['percent_unique']
         self.allow_mentions = config['markov']['allow_mentions']
         self.phrases_list = config['markov']['phrases_list']
         self.state_size = config['markov']['state_size']
-        self.clear_logs_after = config['markov']['clear_logs_after']
         self.send_messages = config['markov']['send_messages']
         self.generate_on = config['markov']['generate_on']
         self.times_to_try = config['markov']['times_to_try']
@@ -40,7 +40,12 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.irc_port = config['twitch']['irc']['port']
         self.channel_handlers = []
         for channel in config['twitch']['channels']:
-            self.channel_handlers.append(channelHandler(channel, config['twitch']['channels'][channel].lower(), self))
+            channel_config = config['twitch']['channels'][channel]
+            for setting in config['markov']['defaults']:
+                if not setting in channel_config or not channel_config[setting]:
+                    channel_config[setting] = config['markov']['globals'][setting]
+            self.config.save()
+            self.channel_handlers.append(channelHandler(channel.lower(), channel_config, self))
         irc.bot.SingleServerIRCBot.__init__(self, [(self.irc_server, self.irc_port, 'oauth:'+self.token)], self.username, self.username)
 
     def on_welcome(self, c, e):

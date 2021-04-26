@@ -14,34 +14,19 @@ class channelHandler():
         self.messageCount = 0
         self.message_file = self.getMessageFile()
         self.last_cull = datetime.datetime.now()
+        self.clear_logs_after = config['clear_logs_after']
+        self.send_messages = config['send_messages']
+        self.unique = config['unique']
+        self.generate_on = config['generate_on']
     
     def on_pubmsg(self, c, e):
         msg = self.parse_msg_event(e)
-        if msg['mod'] or msg['broadcaster'] and e.arguments[0][:1] == '!':
-            cmd = e.arguments[0].split(' ')[0][1:].lower()
-            if cmd == 'clear':
-                if self.parent.clear_logs_after == True:
-                    self.parent.clear_logs_after = False
-                    self.sendMaintenance("No longer clearing memory after message! betch200IQ")
-                else:
-                    self.parent.clear_logs_after = True
-                    self.sendMaintenance("Clearing memory after every message! FeelsDankMan")
-            elif cmd == 'wipe':
-                pass
-            elif cmd == 'toggle':
-                pass
-            elif cmd == 'unique':
-                pass
-            elif cmd == 'setafter':
-                pass
-            elif cmd == 'isalive':
-                pass
-            elif cmd == 'kill':
-                pass
+        if (msg['mod'] or msg['broadcaster']) and msg['content'][:1] == '!':
+            self.handleAdminMessage(msg)
         else:
             pass
-        if e.arguments[0].lower().find(self.username.lower()) != -1:
-            self.logger.info(f'{name}: {e.arguments[0]}')
+        if e.arguments[0].lower().find(self.parent.username.lower()) != -1:
+            self.logger.info(f'{msg["name"]}: {e.arguments[0]}')
     
     def parse_msg_event(self, event):
         out = {}
@@ -58,16 +43,18 @@ class channelHandler():
                 out['mod'] = tag['value'] == '1'
             elif tag['key'] == tag['subscriber']:
                 out['subscriber'] = tag['value'] == '1'
+        out['content'] = event.arguments[0]
         return out
                 
-
-    def sendMessage(self):
-        pass
+    def sendMessage(self, message):
+        self.parent.connection.privmsg('#' + self.channel, message)
 
     def getMessageFile(self):
         dir = os.path.join(os.path.dirname(__file__), 'messages')
-        if not os.path.isdir: os.mkdir(dir)
-        return os.path.join(dir, self.channel)
+        if not os.path.isdir(dir): os.mkdir(dir)
+        f = os.path.join(dir, self.channel)
+        if not os.path.exists(f): open(f, "w").close()
+        return f
     
     def generateMessage(self):
         with open(self.message_file, encoding="utf-8") as f:
@@ -94,9 +81,9 @@ class channelHandler():
         if self.send_messages:
             markoved = self.generateMessage()
             if markoved != None:
-                self.sendMessage(channel, markoved)
+                self.sendMessage(markoved)
             else:
-                print("Could not generate.")
+                self.logger.error("Could not generate.")
 
     def writeMessage(self, message):
         message = self.filterMessage(message)
@@ -158,60 +145,52 @@ class channelHandler():
             last_cull = datetime.datetime.now()
         return last_cull
     
-    def handleAdminMessage(self, username, channel):
-        if username == channel or username == Conf.owner or username in Conf.mods:
-            # Log clearing after message.
-            if message == Conf.CMD_CLEAR:
-                if self.parent.clear_logs_after == True:
-                    self.parent.clear_logs_after = False
-                    self.sendMaintenance("No longer clearing memory after message! betch200IQ")
-                else:
-                    self.parent.clear_logs_after = True
-                    self.sendMaintenance("Clearing memory after every message! FeelsDankMan")
-                return True
-            # Wipe logs
-            if message == Conf.CMD_WIPE:
-                f = open(self.logfile, "w", encoding="utf-8")
-                f.close()
-                self.sendMaintenance(sock, channel, "Wiped memory banks. D:")
-                return True
-            # Toggle functionality
-            if message == Conf.CMD_TOGGLE:
-                if self.send_messages:
-                    self.send_messages = False
-                    self.sendMaintenance(sock, channel, "Messages will no longer be sent! D:")
-                else:
-                    self.send_messages = True
-                    self.sendMaintenance(sock, channel, "Messages are now turned on! :)")
-                return True
-            # Toggle functionality
-            if message == Conf.CMD_self.unique:
-                if self.unique:
-                    self.unique = False
-                    self.sendMaintenance(sock, channel, "Messages will no longer be unique. PogO")
-                else:
-                    self.unique = True
-                    self.sendMaintenance(sock, channel, "Messages will now be unique. PogU")
-                return True
-            # Generate message on how many numbers.
-            if message.split()[0] == Conf.CMD_SET_NUMBER:
-                try:
-                    stringNum = message.split()[1]
-                    if stringNum != None:
-                        num = int(stringNum)
-                        if num <= 0:
-                            raise Exception
-                        self.generate_on = num
-                        self.sendMaintenance(sock, channel, "Messages will now be sent after " + self.generate_on + " chat messages. DankG")
-                except:
-                        self.sendMaintenance(sock, channel, "Current value: " + str(self.generate_on) + ". To set, use: " + str(Conf.CMD_SET_NUMBER) + " [number of messages]")
-                return True
-            # Check if alive.
-            if message == Conf.CMD_ALIVE:
-                self.sendMaintenance(sock, channel, "Yeah, I'm alive and learning. betch2IQ")
-                return True
-            # Kill
-            if (username == channel or username == Conf.owner) and message == Conf.CMD_EXIT:
-                self.sendMaintenance(sock, channel, "You have killed me. D:")
-                exit()
-        return False
+    def handleAdminMessage(self, msg):
+        cmd = msg['content'].split(' ')[0][1:].lower()
+        if cmd == 'clear':
+            if self.clear_logs_after:
+                self.clear_logs_after = False
+                self.parent.config.save()
+                self.sendMessage("No longer clearing memory after message! betch200IQ")
+            else:
+                self.clear_logs_after = True
+                self.parent.config.save()
+                self.sendMessage("Clearing memory after every message! FeelsDankMan")
+        elif cmd == 'wipe':
+            open(self.message_file, "w").close()
+            self.sendMessage("Wiped memory banks. D:")
+        elif cmd == 'toggle':
+            if self.send_messages:
+                self.send_messages = False
+                self.parent.config.save()
+                self.sendMessage("Messages will no longer be sent! D:")
+            else:
+                self.send_messages = True
+                self.parent.config.save()
+                self.sendMessage("Messages are now turned on! :)")
+        elif cmd == 'unique':
+            if self.unique:
+                self.unique = False
+                self.parent.config.save()
+                self.sendMessage("Messages will no longer be unique. PogO")
+            else:
+                self.unique = True
+                self.parent.config.save()
+                self.sendMessage("Messages will now be unique. PogU")
+        elif cmd == 'setafter':
+            try:
+                stringNum = msg['content'].split(' ')[1]
+                if stringNum != None:
+                    num = int(stringNum)
+                    if num <= 0:
+                        raise Exception
+                    self.generate_on = num
+                    self.parent.config.save()
+                    self.sendMessage("Messages will now be sent after " + self.generate_on + " chat messages. DankG")
+            except:
+                    self.sendMessage("Current value: " + str(self.generate_on) + ". To set, use: setafter [number of messages]")
+        elif cmd == 'isalive':
+            self.sendMessage("Yeah, I'm alive and learning. betch2IQ")
+        elif cmd == 'kill':
+            self.sendMessage("You have killed me. D:")
+            exit()

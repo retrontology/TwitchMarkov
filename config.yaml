@@ -7,20 +7,28 @@ twitch:
       ignored_users:
         - 'nightbot'
         - 'streamlabs'
+      clear_logs_after: False
+      send_messages: True
+      unique: True
+      generate_on: 35
   irc:
     server: 'irc.chat.twitch.tv'
     port: 6667
 markov:
-  generate_on: 35
   percent_unique: 50.0
   allow_mentions: True
   phrases_list: 
     - ''
   state_size: 2
-  clear_logs_after: False
-  send_messages: True
   times_to_try: 1000
-  unique: True
   cull_over: 8000
   time_to_cull: 3600
   blacklist_file: ''
+  defaults:
+    ignored_users:
+        - 'nightbot'
+        - 'streamlabs'
+    clear_logs_after: False
+    send_messages: True
+    unique: True
+    generate_on: 35
