@@ -60,7 +60,6 @@ class markovBot(irc.bot.SingleServerIRCBot):
 
     def on_pubmsg(self, c, e):
         self.channel_handlers[e.target[1:]].on_pubmsg(c, e)
-
     
     def load_blacklist(self, blacklist_file):
         with open(blacklist_file, 'r') as f:

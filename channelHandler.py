@@ -26,7 +26,7 @@ class channelHandler():
             pass
         elif (msg['mod'] or msg['broadcaster']) and msg['content'][:1] == '!':
             self.handleAdminMessage(msg)
-        else:
+        elif self.parent.checkBlacklisted(msg['content']):
             pass
         if e.arguments[0].lower().find(self.parent.username.lower()) != -1:
             self.logger.info(f'{msg["name"]}: {e.arguments[0]}')
