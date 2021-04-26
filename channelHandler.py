@@ -1,3 +1,4 @@
+from emoji import demojize
 import os
 import markovify
 import re
@@ -107,6 +108,7 @@ class channelHandler():
         return False
     
     def filterMessage(self, message):
+        message = demojize(message)
         if self.parent.checkBlacklisted(message):
             return False
         # Remove links

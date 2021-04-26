@@ -3,7 +3,6 @@ from channelHandler import channelHandler
 from twitchAPI.twitch import Twitch
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope
-from emoji import demojize
 import datetime
 import socket
 import markovify
