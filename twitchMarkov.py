@@ -22,7 +22,6 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.logger = logging.getLogger("markovBot.bot")
         self.percent_unique = config['markov']['percent_unique']
         self.allow_mentions = config['markov']['allow_mentions']
-        self.phrases_list = config['markov']['phrases_list']
         self.state_size = config['markov']['state_size']
         self.send_messages = config['markov']['send_messages']
         self.generate_on = config['markov']['generate_on']
@@ -114,14 +113,6 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self._connect()
         self.save_oauth_token()
 
-    def listMeetsThresholdToSave(self, part, whole):
-        pF = float(len(part))
-        wF = float(len(whole))
-        if wF == 0:
-            return False
-        uniqueness = (pF/wF) * float(100)
-        return (uniqueness >= self.percent_unique)
-
     def checkBlacklisted(self, message):
         # Check words that the bot should NEVER learn.
         for i in self.blacklist_words:
@@ -129,80 +120,6 @@ class markovBot(irc.bot.SingleServerIRCBot):
                 return True
         return False
 
-
-def old_main():
-    # PROGRAM HERE
-
-    last_cull = datetime.datetime.now()
-
-    while True:
-        # Initialize socket.
-        sock = socket.socket()
-
-        # Connect to the Twitch IRC chat socket.
-        sock.connect((Conf.server, Conf.port))
-
-        # Authenticate with the server.
-        sock.send(f"PASS {Conf.token}\n".encode('utf-8'))
-        sock.send(f"NICK {Conf.nickname}\n".encode('utf-8'))
-        sock.send(f"JOIN #{Conf.channel}\n".encode('utf-8'))
-
-        logfile = Conf.channel + "Logs.txt"
-
-        print("Connected", Conf.nickname, ".")
-
-        # Main loop
-        while True:
-            try:
-                # Receive socket message.
-                resp = sock.recv(2048).decode('utf-8')
-
-                # Keepalive code.
-                if resp.startswith('PING'):
-                    sock.send("PONG\n".encode('utf-8'))
-                # Actual message that isn't empty.
-                elif len(resp) > 0:
-                    try:
-                        msg = demojize(resp)
-                        # Break out username / channel / message.
-                        regex = re.search(r':(.*)\!.*@.*\.tmi\.twitch\.tv PRIVMSG #(.*) :(.*)', msg)
-                        # If we have a matching message, do something.
-                        if regex != None:
-                            # The variables we need.
-                            username, channel, message = regex.groups()
-                            message = message.strip()
-
-                            # Handle ignored users.
-                            if isUserIgnored(username):
-                                continue
-
-                            # Broadcaster saying something.
-                            if handleAdminMessage(username, channel, sock):
-                                continue
-
-                            # Validate and print message to the log.
-                            if not writeMessage(message):
-                                continue
-
-                            # At this point, it's not an admin message, and it's a successful, valid entry.
-
-                            # Increase messages logged.
-                            self.messageCount += 1
-
-                            # Generate Markov
-                            if (self.messageCount % self.generate_on) == 0:
-                                generateAndSendMessage(sock, channel)
-                                last_cull = shouldCull(last_cull)
-                                self.messageCount = 0
-                    except Exception as e:
-                        print("Inner")
-                        traceback.print_exc() 
-                        print(e)
-            except Exception as e:
-                print("Outer")
-                traceback.print_exc() 
-                print(e)
-                break
 
 def main():
     logger = setup_logger('markovBot')

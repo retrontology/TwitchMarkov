@@ -11,9 +11,10 @@ class channelHandler():
         self.channel = channel
         self.parent = parent
         self.user_id = self.parent.twitch.get_users(logins=[channel.lower()])['data'][0]['id']
-        self.messageCount = 0
+        self.message_count = 0
         self.message_file = self.getMessageFile()
         self.last_cull = datetime.datetime.now()
+        self.phrases_list = []
         self.clear_logs_after = config['clear_logs_after']
         self.send_messages = config['send_messages']
         self.unique = config['unique']
@@ -26,10 +27,14 @@ class channelHandler():
             pass
         elif (msg['mod'] or msg['broadcaster']) and msg['content'][:1] == '!':
             self.handleAdminMessage(msg)
-        elif self.parent.checkBlacklisted(msg['content']):
-            pass
+        else:
+            self.writeMessage(msg['content'])
         if e.arguments[0].lower().find(self.parent.username.lower()) != -1:
             self.logger.info(f'{msg["name"]}: {e.arguments[0]}')
+        if (self.message_count % self.generate_on) == 0:
+            self.generateAndSendMessage()
+            self.checkCull()
+            self.messageCount = 0
     
     def parse_msg_event(self, event):
         out = {}
@@ -60,7 +65,7 @@ class channelHandler():
         return f
     
     def generateMessage(self):
-        with open(self.message_file, encoding="utf-8") as f:
+        with open(self.message_file) as f:
             text = f.read()
         text_model = markovify.NewlineText(text, state_size=self.parent.state_size)
         testMess = None
@@ -80,7 +85,7 @@ class channelHandler():
             self.phrases_list = [testMess]
         return testMess
 
-    def generateAndSendMessage(self, channel):
+    def generateAndSendMessage(self):
         if self.send_messages:
             markoved = self.generateMessage()
             if markoved != None:
@@ -91,23 +96,24 @@ class channelHandler():
     def writeMessage(self, message):
         message = self.filterMessage(message)
         if message != None and message != "":
-            if self.messageCount == 0 and self.parent.clear_logs_after:
-                f = open(self.message_file, "w", encoding="utf-8")
+            if self.message_count == 0 and self.parent.clear_logs_after:
+                f = open(self.message_file, "w")
             else:
-                f = open(self.message_file, "a", encoding="utf-8")
+                f = open(self.message_file, "a")
             f.write(message + "\n")
             f.close()
+            self.message_count += 1
             return True
         return False
     
     def filterMessage(self, message):
-        if self.checkBlacklisted(message):
-            return None
+        if self.parent.checkBlacklisted(message):
+            return False
         # Remove links
         # TODO: Fix
         message = re.sub(r"http\S+", "", message)
         # Remove mentions
-        if self.allow_mentions == False:
+        if self.parent.allow_mentions == False:
             message = re.sub(r"@\S+", "", message)
         # Remove just repeated messages.
         words = message.split()
@@ -119,34 +125,36 @@ class channelHandler():
         message = re.sub(r" +", " ", message)
         message = message.strip()
         return message
-
-    def isUserIgnored(self, username):
-        if (username in Conf.ignoredUsers):
-            return True
-        return False
+    
+    def listMeetsThresholdToSave(self, part, whole):
+        pF = float(len(part))
+        wF = float(len(whole))
+        if wF == 0:
+            return False
+        uniqueness = (pF/wF) * float(100)
+        return (uniqueness >= self.parent.percent_unique)
 
     def cullFile(self):
-        fin = open(self.logfile, "r", encoding="utf-8")
+        fin = open(self.message_file, "r", encoding="utf-8")
         data_list = fin.readlines()
         fin.close()
         
         size = len(data_list)
-        if size <= self.cull_over:
+        if size <= self.parent.cull_over:
             return
         size_delete = size // 2
         del data_list[0:size_delete]
         
-        fout = open(self.logfile, "w", encoding="utf-8")
+        fout = open(self.message_file, "w", encoding="utf-8")
         fout.writelines(data_list)
         fout.close()
     
-    def shouldCull(self, last_cull):
+    def checkCull(self):
         now_time = datetime.datetime.now()
-        time_since_cull = now_time - last_cull
-        if time_since_cull > self.time_to_cull:
+        time_since_cull = now_time - self.last_cull
+        if time_since_cull > self.parent.time_to_cull:
             self.cullFile()
-            last_cull = datetime.datetime.now()
-        return last_cull
+            self.last_cull = datetime.datetime.now()
     
     def handleAdminMessage(self, msg):
         cmd = msg['content'].split(' ')[0][1:].lower()

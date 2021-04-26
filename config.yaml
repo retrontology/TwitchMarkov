@@ -17,8 +17,6 @@ twitch:
 markov:
   percent_unique: 50.0
   allow_mentions: True
-  phrases_list: 
-    - ''
   state_size: 2
   times_to_try: 1000
   cull_over: 8000
