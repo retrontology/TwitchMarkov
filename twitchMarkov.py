@@ -121,7 +121,7 @@ class markovBot(irc.bot.SingleServerIRCBot):
 
 def main():
     logger = setup_logger('markovBot')
-    config = load_config(os.path.join(os.path.dirname(__file__), 'config.yaml.bak'))
+    config = load_config(os.path.join(os.path.dirname(__file__), 'config.yaml'))
     bot = markovBot(config)
     bot.start()
 
