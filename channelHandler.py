@@ -9,6 +9,7 @@ class channelHandler():
 
     def __init__(self, channel, config, parent):
         self.logger = logging.getLogger(f'markovBot.bot.{channel}')
+        self.logger.info(f'Initializing Channel Handler for {channel}')
         self.channel = channel
         self.parent = parent
         self.user_id = self.parent.twitch.get_users(logins=[channel.lower()])['data'][0]['id']

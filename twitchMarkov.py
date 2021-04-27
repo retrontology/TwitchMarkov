@@ -82,7 +82,14 @@ class markovBot(irc.bot.SingleServerIRCBot):
         else:
             self.token = tokens[0]
             self.refresh_token = tokens[1]
-        self.twitch.set_user_authentication(self.token, target_scope, self.refresh_token)
+        try:
+            self.twitch.set_user_authentication(self.token, target_scope, self.refresh_token)
+        except Exception as e:
+            self.logger.error(e)
+            auth = UserAuthenticator(self.twitch, target_scope, force_verify=False)
+            self.token, self.refresh_token = auth.authenticate()
+            self.save_oauth_token()
+            self.twitch.set_user_authentication(self.token, target_scope, self.refresh_token)
 
     def save_oauth_token(self):
         pickle_file = self.get_oauth_file()
@@ -147,7 +154,7 @@ def setup_logger(logname, logpath=""):
     file_handler.setFormatter(form)
     stream_handler.setFormatter(form)
     file_handler.setLevel(logging.INFO)
-    stream_handler.setLevel(logging.INFO)
+    stream_handler.setLevel(logging.DEBUG)
     logger.addHandler(file_handler)
     logger.addHandler(stream_handler)
     return logger
