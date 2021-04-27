@@ -3,6 +3,7 @@ from channelHandler import channelHandler
 from twitchAPI.twitch import Twitch
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope
+from threading import Thread
 import datetime
 import socket
 import markovify
@@ -53,11 +54,12 @@ class markovBot(irc.bot.SingleServerIRCBot):
             c.join('#' + channel.lower())
 
     def on_join(self, c, e):
-        self.logger.info(f'Joined {e.target}!')
+        self.logger.debug(f'Joined {e.target}!')
 
     def on_pubmsg(self, c, e):
-        self.channel_handlers[e.target[1:]].on_pubmsg(c, e)
-    
+        self.logger.debug(f'Passing message to {e.target[1:]} handler')
+        Thread(target=self.channel_handlers[e.target[1:]].on_pubmsg, args=(c, e, )).start()
+        
     def load_blacklist(self, blacklist_file):
         with open(blacklist_file, 'r') as f:
             words = [line.rstrip('\n') for line in f]
