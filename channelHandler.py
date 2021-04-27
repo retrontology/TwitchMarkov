@@ -88,7 +88,11 @@ class channelHandler():
         return testMess
 
     def generateAndSendMessage(self):
-        markoved = self.generateMessage()
+        try:
+            markoved = self.generateMessage()
+        except Exception as e:
+            self.logger.error(e)
+            markoved = None
         if markoved != None:
             self.logger.info(f'Generated: {markoved}')
             if self.send_messages:
