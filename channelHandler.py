@@ -45,12 +45,12 @@ class channelHandler():
             elif tag['key'] == "user-id":
                 out['user_id'] = tag['value']
             elif tag['key'] == "tmi-sent-ts":
-                out['time'] = datetime.datetime.fromtimestamp(float(tag['value']))
+                out['time'] = datetime.datetime.fromtimestamp(float(tag['value'])/1000)
             elif tag['key'] == 'badges':
                 out['broadcaster'] = tag['value'] == 'broadcaster/1'
-            elif tag['key'] == tag['user-type']:
+            elif tag['key'] == 'user-type':
                 out['mod'] = tag['value'] == '1'
-            elif tag['key'] == tag['subscriber']:
+            elif tag['key'] == 'subscriber':
                 out['subscriber'] = tag['value'] == '1'
         out['content'] = event.arguments[0]
         return out
@@ -71,7 +71,7 @@ class channelHandler():
             text = f.read()
         text_model = markovify.NewlineText(text, state_size=self.parent.state_size)
         testMess = None
-        if self.parent.unique and (len(self.phrases_list) > 0):
+        if self.unique and (len(self.phrases_list) > 0):
             foundUnique = False
             tries = 0
             while not foundUnique and tries < 20:
@@ -98,8 +98,8 @@ class channelHandler():
 
     def writeMessage(self, message):
         message = self.filterMessage(message)
-        if message != None and message != "":
-            if self.message_count == 0 and self.parent.clear_logs_after:
+        if message != None and message:
+            if self.message_count == 0 and self.clear_logs_after:
                 f = open(self.message_file, "w")
             else:
                 f = open(self.message_file, "a")
@@ -156,7 +156,7 @@ class channelHandler():
     def checkCull(self):
         now_time = datetime.datetime.now()
         time_since_cull = now_time - self.last_cull
-        if time_since_cull > self.parent.time_to_cull:
+        if time_since_cull.total_seconds() > self.parent.time_to_cull:
             self.cullFile()
             self.last_cull = datetime.datetime.now()
     

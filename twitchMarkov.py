@@ -10,6 +10,7 @@ import re
 import traceback
 import irc.bot
 import logging
+import logging.handlers
 import pickle
 import os
 
@@ -22,10 +23,7 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.percent_unique = config['markov']['percent_unique']
         self.allow_mentions = config['markov']['allow_mentions']
         self.state_size = config['markov']['state_size']
-        self.send_messages = config['markov']['send_messages']
-        self.generate_on = config['markov']['generate_on']
         self.times_to_try = config['markov']['times_to_try']
-        self.unique = config['markov']['unique']
         self.cull_over = config['markov']['cull_over']
         self.time_to_cull = config['markov']['time_to_cull']
         self.blacklist_file = config['markov']['blacklist_file']
@@ -34,16 +32,17 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.client_id = config['twitch']['client_id']
         self.client_secret = config['twitch']['client_secret']
         self.twitch_setup()
+        self.get_oauth_token()
         self.irc_server = config['twitch']['irc']['server']
         self.irc_port = config['twitch']['irc']['port']
-        self.channel_handlers = []
+        self.channel_handlers = {}
         for channel in config['twitch']['channels']:
             channel_config = config['twitch']['channels'][channel]
             for setting in config['markov']['defaults']:
                 if not setting in channel_config or not channel_config[setting]:
-                    channel_config[setting] = config['markov']['globals'][setting]
+                    channel_config[setting] = config['markov']['defaults'][setting]
             self.config.save()
-            self.channel_handlers.append(channelHandler(channel.lower(), channel_config, self))
+            self.channel_handlers[channel.lower()] = channelHandler(channel.lower(), channel_config, self)
         irc.bot.SingleServerIRCBot.__init__(self, [(self.irc_server, self.irc_port, 'oauth:'+self.token)], self.username, self.username)
 
     def on_welcome(self, c, e):
@@ -51,7 +50,7 @@ class markovBot(irc.bot.SingleServerIRCBot):
         c.cap('REQ', ':twitch.tv/tags')
         c.cap('REQ', ':twitch.tv/commands')
         for channel in self.channel_handlers:
-            c.join('#' + channel.channel)
+            c.join('#' + channel.lower())
 
     def on_join(self, c, e):
         self.logger.info(f'Joined {e.target}!')
@@ -122,7 +121,7 @@ class markovBot(irc.bot.SingleServerIRCBot):
 
 def main():
     logger = setup_logger('markovBot')
-    config = load_config(os.path.join(os.path.dirname(__file__), 'config.yaml'))
+    config = load_config(os.path.join(os.path.dirname(__file__), 'config.yaml.bak'))
     bot = markovBot(config)
     bot.start()
 
