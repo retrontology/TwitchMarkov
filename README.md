@@ -6,6 +6,7 @@ A Markov chain generator for Twitch.
 > pip install -r requirements.txt
 - Make a Twitch Account
 - [Register Twitch Application](https://dev.twitch.tv/console/apps)
+- Add the twitchAPI OAuth Redirect URL of http://localhost:17563 in the [Twitch Developer Console](https://dev.twitch.tv/console/apps). If you will be using the application in a cli only environment, you also need to add https://retrohollow.com/twitchAuth.php
 - Fill out the config.yaml file.
 - Execute.
 > python twitchMarkov.py

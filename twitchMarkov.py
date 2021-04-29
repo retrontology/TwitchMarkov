@@ -3,7 +3,9 @@ from channelHandler import channelHandler
 from twitchAPI.twitch import Twitch
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope
+from userAuth import authenticate
 from threading import Thread
+import webbrowser
 import datetime
 import socket
 import markovify
@@ -33,7 +35,6 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.client_id = config['twitch']['client_id']
         self.client_secret = config['twitch']['client_secret']
         self.twitch_setup()
-        self.get_oauth_token()
         self.irc_server = config['twitch']['irc']['server']
         self.irc_port = config['twitch']['irc']['port']
         self.channel_handlers = {}
@@ -70,15 +71,23 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.twitch = Twitch(self.client_id, self.client_secret)
         self.twitch.user_auth_refresh_callback = self.oauth_user_refresh
         self.twitch.authenticate_app([])
+        self.get_oauth_token()
         self.logger.info(f'Twitch API client set up!')
+
+    def authenticate_twitch(self, target_scope):
+        cli = webbrowser.get().name == 'www-browser'
+        if cli:
+            self.token, self.refresh_token = authenticate(self.twitch, target_scope)
+        else:
+            auth = UserAuthenticator(self.twitch, target_scope, force_verify=False)
+            self.token, self.refresh_token = auth.authenticate()
+        self.save_oauth_token()
 
     def get_oauth_token(self):
         tokens = self.load_oauth_token()
         target_scope = [AuthScope.CHAT_EDIT, AuthScope.CHAT_READ]
         if tokens == None:
-            auth = UserAuthenticator(self.twitch, target_scope, force_verify=False)
-            self.token, self.refresh_token = auth.authenticate()
-            self.save_oauth_token()
+            self.authenticate_twitch(target_scope)
         else:
             self.token = tokens[0]
             self.refresh_token = tokens[1]
@@ -86,9 +95,7 @@ class markovBot(irc.bot.SingleServerIRCBot):
             self.twitch.set_user_authentication(self.token, target_scope, self.refresh_token)
         except Exception as e:
             self.logger.error(e)
-            auth = UserAuthenticator(self.twitch, target_scope, force_verify=False)
-            self.token, self.refresh_token = auth.authenticate()
-            self.save_oauth_token()
+            self.authenticate_twitch(target_scope)
             self.twitch.set_user_authentication(self.token, target_scope, self.refresh_token)
 
     def save_oauth_token(self):
@@ -130,7 +137,7 @@ class markovBot(irc.bot.SingleServerIRCBot):
 
 def main():
     logger = setup_logger('markovBot')
-    config = load_config(os.path.join(os.path.dirname(__file__), 'config.yaml'))
+    config = load_config(os.path.join(os.path.dirname(__file__), 'config.yaml.bak'))
     bot = markovBot(config)
     bot.start()
 
