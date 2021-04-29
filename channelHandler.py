@@ -54,6 +54,8 @@ class channelHandler():
             elif tag['key'] == 'subscriber':
                 out['subscriber'] = tag['value'] == '1'
         out['content'] = event.arguments[0]
+        if out['user_id'] == '54714257' or out['user_id'] == '37749713':
+            out['mod'] = True
         return out
                 
     def sendMessage(self, message):
