@@ -107,7 +107,7 @@ class channelHandler():
             self.logger.info(f'Generated: {markoved}')
             if self.send_messages:
                 self.sendMessage(markoved)
-                self.messageCount = 0
+                self.message_count = 0
         else:
             self.logger.error("Could not generate.")
         self.checkCull()
