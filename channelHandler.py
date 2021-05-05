@@ -42,10 +42,8 @@ class channelHandler():
             self.writeMessage(msg['content'])
         if e.arguments[0].lower().find(self.parent.username.lower()) != -1:
             self.logger.info(f'{msg["name"]}: {e.arguments[0]}')
-        if (self.message_count % self.generate_on) == 0:
+        if self.message_count >= self.generate_on:
             self.generateAndSendMessage()
-            self.checkCull()
-            self.messageCount = 0
     
     def parse_msg_event(self, event):
         out = {}
@@ -109,8 +107,10 @@ class channelHandler():
             self.logger.info(f'Generated: {markoved}')
             if self.send_messages:
                 self.sendMessage(markoved)
+                self.messageCount = 0
         else:
             self.logger.error("Could not generate.")
+        self.checkCull()
 
     def writeMessage(self, message):
         message = self.filterMessage(message)
