@@ -27,11 +27,10 @@ class channelHandler():
     def initCooldowns(self):
         self.cooldowns = {}
         self.last_used = {}
-        now = datetime.datetime.now()
         self.cooldowns['speak'] = 300
-        self.last_used['speak'] = now
+        self.last_used['speak'] = datetime.datetime.fromtimestamp(0)
         self.cooldowns['commands'] = 300
-        self.last_used['commands'] = now
+        self.last_used['commands'] = datetime.datetime.fromtimestamp(0)
     
     def on_pubmsg(self, c, e):
         msg = self.parse_msg_event(e)
@@ -183,7 +182,7 @@ class channelHandler():
             self.sendMessage('You can find a list of my commands here: https://retrohollow.com/markov/commands.html')
             self.last_used[cmd] = datetime.datetime.now()
         elif cmd == 'speak' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds() >= self.cooldowns[cmd]:
-            self.generateAndSendMessage
+            self.generateAndSendMessage()
             self.last_used[cmd] = datetime.datetime.now()
         if msg['mod'] or msg['broadcaster']:
             if cmd == 'clear':
