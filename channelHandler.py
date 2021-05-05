@@ -22,13 +22,23 @@ class channelHandler():
         self.unique = config['unique']
         self.generate_on = config['generate_on']
         self.ignored_users = [x.lower() for x in config['ignored_users']]
+        self.initCooldowns()
+
+    def initCooldowns(self):
+        self.cooldowns = {}
+        self.last_used = {}
+        now = datetime.datetime.now()
+        self.cooldowns['speak'] = 300
+        self.last_used['speak'] = now
+        self.cooldowns['commands'] = 300
+        self.last_used['commands'] = now
     
     def on_pubmsg(self, c, e):
         msg = self.parse_msg_event(e)
         if msg['name'].lower() in self.ignored_users:
             pass
-        elif (msg['mod'] or msg['broadcaster']) and msg['content'][:1] == '!':
-            self.handleAdminMessage(msg)
+        elif msg['content'][:1] == '!':
+            self.handleCommands(msg)
         else:
             self.writeMessage(msg['content'])
         if e.arguments[0].lower().find(self.parent.username.lower()) != -1:
@@ -167,54 +177,59 @@ class channelHandler():
             self.cullFile()
             self.last_cull = datetime.datetime.now()
     
-    def handleAdminMessage(self, msg):
+    def handleCommands(self, msg):
         cmd = msg['content'].split(' ')[0][1:].lower()
-        if cmd == 'commands':
+        if cmd == 'commands' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds >= self.cooldowns[cmd]:
             self.sendMessage('You can find a list of my commands here: https://retrohollow.com/markov/commands.html')
-        elif cmd == 'clear':
-            if self.clear_logs_after:
-                self.clear_logs_after = False
-                self.parent.config.save()
-                self.sendMessage("No longer clearing memory after message! betch200IQ")
-            else:
-                self.clear_logs_after = True
-                self.parent.config.save()
-                self.sendMessage("Clearing memory after every message! FeelsDankMan")
-        elif cmd == 'wipe':
-            open(self.message_file, "w").close()
-            self.sendMessage("Wiped memory banks. D:")
-        elif cmd == 'toggle':
-            if self.send_messages:
-                self.send_messages = False
-                self.parent.config.save()
-                self.sendMessage("Messages will no longer be sent! D:")
-            else:
-                self.send_messages = True
-                self.parent.config.save()
-                self.sendMessage("Messages are now turned on! :)")
-        elif cmd == 'unique':
-            if self.unique:
-                self.unique = False
-                self.parent.config.save()
-                self.sendMessage("Messages will no longer be unique. PogO")
-            else:
-                self.unique = True
-                self.parent.config.save()
-                self.sendMessage("Messages will now be unique. PogU")
-        elif cmd == 'setafter':
-            try:
-                stringNum = msg['content'].split(' ')[1]
-                if stringNum != None:
-                    num = int(stringNum)
-                    if num <= 0:
-                        raise Exception
-                    self.generate_on = num
+            self.last_used[cmd] = datetime.datetime.now()
+        elif cmd == 'speak' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds >= self.cooldowns[cmd]:
+            self.generateAndSendMessage
+            self.last_used[cmd] = datetime.datetime.now()
+        if msg['mod'] or msg['broadcaster']:
+            if cmd == 'clear':
+                if self.clear_logs_after:
+                    self.clear_logs_after = False
                     self.parent.config.save()
-                    self.sendMessage("Messages will now be sent after " + self.generate_on + " chat messages. DankG")
-            except:
-                    self.sendMessage("Current value: " + str(self.generate_on) + ". To set, use: setafter [number of messages]")
-        elif cmd == 'isalive':
-            self.sendMessage("Yeah, I'm alive and learning. betch2IQ")
-        elif cmd == 'kill':
-            self.sendMessage("You have killed me. D:")
-            exit()
+                    self.sendMessage("No longer clearing memory after message! betch200IQ")
+                else:
+                    self.clear_logs_after = True
+                    self.parent.config.save()
+                    self.sendMessage("Clearing memory after every message! FeelsDankMan")
+            elif cmd == 'wipe':
+                open(self.message_file, "w").close()
+                self.sendMessage("Wiped memory banks. D:")
+            elif cmd == 'toggle':
+                if self.send_messages:
+                    self.send_messages = False
+                    self.parent.config.save()
+                    self.sendMessage("Messages will no longer be sent! D:")
+                else:
+                    self.send_messages = True
+                    self.parent.config.save()
+                    self.sendMessage("Messages are now turned on! :)")
+            elif cmd == 'unique':
+                if self.unique:
+                    self.unique = False
+                    self.parent.config.save()
+                    self.sendMessage("Messages will no longer be unique. PogO")
+                else:
+                    self.unique = True
+                    self.parent.config.save()
+                    self.sendMessage("Messages will now be unique. PogU")
+            elif cmd == 'setafter':
+                try:
+                    stringNum = msg['content'].split(' ')[1]
+                    if stringNum != None:
+                        num = int(stringNum)
+                        if num <= 0:
+                            raise Exception
+                        self.generate_on = num
+                        self.parent.config.save()
+                        self.sendMessage("Messages will now be sent after " + self.generate_on + " chat messages. DankG")
+                except:
+                        self.sendMessage("Current value: " + str(self.generate_on) + ". To set, use: setafter [number of messages]")
+            elif cmd == 'isalive':
+                self.sendMessage("Yeah, I'm alive and learning. betch2IQ")
+            elif cmd == 'kill':
+                self.sendMessage("You have killed me. D:")
+                exit()
