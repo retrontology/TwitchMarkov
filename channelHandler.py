@@ -169,7 +169,9 @@ class channelHandler():
     
     def handleAdminMessage(self, msg):
         cmd = msg['content'].split(' ')[0][1:].lower()
-        if cmd == 'clear':
+        if cmd == "commands":
+            self.sendMessage('You can find a list of my commands here: https://retrohollow.com/markov/commands')
+        elif cmd == 'clear':
             if self.clear_logs_after:
                 self.clear_logs_after = False
                 self.parent.config.save()
