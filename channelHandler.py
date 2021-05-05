@@ -179,10 +179,10 @@ class channelHandler():
     
     def handleCommands(self, msg):
         cmd = msg['content'].split(' ')[0][1:].lower()
-        if cmd == 'commands' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds >= self.cooldowns[cmd]:
+        if cmd == 'commands' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds() >= self.cooldowns[cmd]:
             self.sendMessage('You can find a list of my commands here: https://retrohollow.com/markov/commands.html')
             self.last_used[cmd] = datetime.datetime.now()
-        elif cmd == 'speak' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds >= self.cooldowns[cmd]:
+        elif cmd == 'speak' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds() >= self.cooldowns[cmd]:
             self.generateAndSendMessage
             self.last_used[cmd] = datetime.datetime.now()
         if msg['mod'] or msg['broadcaster']:
