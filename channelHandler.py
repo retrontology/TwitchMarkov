@@ -136,7 +136,7 @@ class channelHandler():
             cursor = connection.cursor()
             if self.message_count == 0 and self.clear_logs_after:
                 cursor.execute('delete from messages')
-            cursor.execute('insert into messages values (?, ?, ?, ?, ?)', (msg['time'], msg['user_id'], msg['name'], msg['mod'], msg['content']))
+            cursor.execute('insert into messages values (?, ?, ?, ?, ?)', (msg['time'], msg['user_id'], msg['name'], msg['mod'], message))
             connection.commit()
             cursor.close()
             connection.close()
