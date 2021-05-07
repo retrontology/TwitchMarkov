@@ -36,10 +36,11 @@ class channelHandler():
         self.last_used['reply'] = datetime.datetime.fromtimestamp(0)
 
     def initMessageDB(self):
+        self.db_timeout = 10
         dir = os.path.join(os.path.dirname(__file__), 'messages')
         if not os.path.isdir(dir): os.mkdir(dir)
         self.db_file = os.path.join(dir, f'{self.channel.lower()}.db')
-        connection = sqlite3.connect(self.db_file)
+        connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
         sqlite3.register_adapter(bool, int)
         sqlite3.register_converter("BOOLEAN", lambda v: bool(int(v)))
         cursor = connection.cursor()
@@ -90,7 +91,7 @@ class channelHandler():
         self.parent.connection.privmsg('#' + self.channel, message)
     
     def generateMessage(self):
-        connection = sqlite3.connect(self.db_file)
+        connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
         cursor = connection.cursor()
         text = '\n'.join([x[0] for x in cursor.execute('SELECT message from messages').fetchall()])
         cursor.close()
@@ -133,7 +134,7 @@ class channelHandler():
     def writeMessage(self, msg):
         message = self.filterMessage(msg['content'])
         if message != None and message:
-            connection = sqlite3.connect(self.db_file)
+            connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
             cursor = connection.cursor()
             if self.message_count == 0 and self.clear_logs_after:
                 cursor.execute('delete from messages')
@@ -175,7 +176,7 @@ class channelHandler():
         return (uniqueness >= self.parent.percent_unique)
 
     def cullFile(self):
-        connection = sqlite3.connect(self.db_file)
+        connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
         cursor = connection.cursor()
         size = cursor.execute('select count(*)').fetchall()[0][0]
         if size > self.parent.cull_over:
@@ -212,7 +213,7 @@ class channelHandler():
                     self.parent.config.save()
                     self.sendMessage("Clearing memory after every message! FeelsDankMan")
             elif cmd == 'wipe':
-                connection = sqlite3.connect(self.db_file)
+                connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
                 cursor = connection.cursor()
                 cursor.execute('delete from messages')
                 connection.commit()
