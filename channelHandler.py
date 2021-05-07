@@ -138,6 +138,8 @@ class channelHandler():
             cursor = connection.cursor()
             if self.message_count == 0 and self.clear_logs_after:
                 cursor.execute('delete from messages')
+                connection.commit()
+                cursor.execute('vacuum')
             cursor.execute('insert into messages values (?, ?, ?, ?, ?)', (msg['time'], msg['user_id'], msg['name'], msg['mod'], message))
             connection.commit()
             cursor.close()
@@ -220,6 +222,7 @@ class channelHandler():
                 cursor = connection.cursor()
                 cursor.execute('delete from messages')
                 connection.commit()
+                cursor.execute('vacuum')
                 cursor.close()
                 connection.close()
                 self.sendMessage("Wiped memory banks. D:")
