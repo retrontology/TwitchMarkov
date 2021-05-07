@@ -43,6 +43,7 @@ class channelHandler():
         sqlite3.register_adapter(bool, int)
         sqlite3.register_converter("BOOLEAN", lambda v: bool(int(v)))
         cursor = connection.cursor()
+        cursor.execute('PRAGMA journal_mode=WAL')
         cursor.execute('create table if not exists messages(date timestamp, user_id integer, name text, mod BOOLEAN, message text)')
         connection.commit()
         cursor.close()
