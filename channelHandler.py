@@ -116,6 +116,7 @@ class channelHandler():
 
     def generateAndSendMessage(self, target=None):
         try:
+            self.message_count = 0
             markoved = self.generateMessage()
         except Exception as e:
             self.logger.error(e)
@@ -125,7 +126,6 @@ class channelHandler():
                 markoved = f'@{target} {markoved}'
             self.logger.info(f'Generated: {markoved}')
             if self.send_messages: self.sendMessage(markoved)
-            self.message_count = 0
                 
         else:
             self.logger.error("Could not generate.")
