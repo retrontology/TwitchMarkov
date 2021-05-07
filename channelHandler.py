@@ -31,6 +31,8 @@ class channelHandler():
         self.last_used['speak'] = datetime.datetime.fromtimestamp(0)
         self.cooldowns['commands'] = 300
         self.last_used['commands'] = datetime.datetime.fromtimestamp(0)
+        self.cooldowns['reply'] = 120
+        self.last_used['reply'] = datetime.datetime.fromtimestamp(0)
     
     def on_pubmsg(self, c, e):
         msg = self.parse_msg_event(e)
@@ -38,10 +40,13 @@ class channelHandler():
             pass
         elif msg['content'][:1] == '!':
             self.handleCommands(msg)
+        elif msg['content'].lower().find(f'@{self.parent.username.lower()}') != -1:
+            self.logger.info(f'{msg["name"]}: {msg["content"]}')
+            if (datetime.datetime.now() - self.last_used['reply']).total_seconds() >= self.cooldowns['reply']:
+                self.generateAndSendMessage(msg['name'])
+                self.last_used['reply'] = datetime.datetime.now()
         else:
             self.writeMessage(msg['content'])
-        if e.arguments[0].lower().find(self.parent.username.lower()) != -1:
-            self.logger.info(f'{msg["name"]}: {e.arguments[0]}')
         if self.message_count >= self.generate_on:
             self.generateAndSendMessage()
     
@@ -97,13 +102,15 @@ class channelHandler():
             self.phrases_list = [testMess]
         return testMess
 
-    def generateAndSendMessage(self):
+    def generateAndSendMessage(self, target=None):
         try:
             markoved = self.generateMessage()
         except Exception as e:
             self.logger.error(e)
             markoved = None
         if markoved != None:
+            if target != None:
+                markoved = f'@{target} {markoved}'
             self.logger.info(f'Generated: {markoved}')
             if self.send_messages:
                 self.sendMessage(markoved)
