@@ -179,8 +179,10 @@ class channelHandler():
         connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
         cursor = connection.cursor()
         size = cursor.execute('select count(*)').fetchall()[0][0]
+        self.logger.debug(f'Size of messages: {size}')
         if size > self.parent.cull_over:
             size_delete = size // 2
+            self.logger.debug(f'Culling rows below: {size_delete}')
             cursor.execute('delete from messages where rowid < ?', (size_delete,))
             connection.commit()
             cursor.execute('vacuum')
@@ -190,6 +192,7 @@ class channelHandler():
     def checkCull(self):
         now_time = datetime.datetime.now()
         time_since_cull = now_time - self.last_cull
+        self.logger.debug(f'Time since last cull: {time_since_cull.total_seconds()}')
         if time_since_cull.total_seconds() > self.parent.time_to_cull:
             self.cullFile()
             self.last_cull = datetime.datetime.now()
