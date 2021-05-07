@@ -24,11 +24,6 @@ class channelHandler():
         self.generate_on = config['generate_on']
         self.ignored_users = [x.lower() for x in config['ignored_users']]
         self.initCooldowns()
-    
-    def __del__(self):
-        if self.db:
-            self.db.commit()
-            self.db.close()
 
     def initCooldowns(self):
         self.cooldowns = {}
@@ -43,14 +38,15 @@ class channelHandler():
     def initMessageDB(self):
         dir = os.path.join(os.path.dirname(__file__), 'messages')
         if not os.path.isdir(dir): os.mkdir(dir)
-        f = os.path.join(dir, f'{self.channel.lower()}.db')
-        self.db = sqlite3.connect(f)
+        self.db_file = os.path.join(dir, f'{self.channel.lower()}.db')
+        connection = sqlite3.connect(self.db_file)
         sqlite3.register_adapter(bool, int)
         sqlite3.register_converter("BOOLEAN", lambda v: bool(int(v)))
-        cursor = self.db.cursor()
+        cursor = connection.cursor()
         cursor.execute('create table if not exists messages(date timestamp, user_id integer, name text, mod BOOLEAN, message text)')
-        self.db.commit()
+        connection.commit()
         cursor.close()
+        connection.close()
     
     def on_pubmsg(self, c, e):
         msg = self.parse_msg_event(e)
@@ -93,9 +89,11 @@ class channelHandler():
         self.parent.connection.privmsg('#' + self.channel, message)
     
     def generateMessage(self):
-        cursor = self.db.cursor()
+        connection = sqlite3.connect(self.db_file)
+        cursor = connection.cursor()
         text = '\n'.join([x[0] for x in cursor.execute('SELECT message from messages').fetchall()])
         cursor.close()
+        connection.close()
         text_model = markovify.NewlineText(text, state_size=self.parent.state_size)
         testMess = None
         if self.unique and (len(self.phrases_list) > 0):
@@ -134,12 +132,14 @@ class channelHandler():
     def writeMessage(self, msg):
         message = self.filterMessage(msg['content'])
         if message != None and message:
-            cursor = self.db.cursor()
+            connection = sqlite3.connect(self.db_file)
+            cursor = connection.cursor()
             if self.message_count == 0 and self.clear_logs_after:
                 cursor.execute('delete from messages')
             cursor.execute('insert into messages values (?, ?, ?, ?, ?)', (msg['time'], msg['user_id'], msg['name'], msg['mod'], msg['content']))
-            self.db.commit()
+            connection.commit()
             cursor.close()
+            connection.close()
             self.message_count += 1
             return True
         return False
@@ -174,14 +174,16 @@ class channelHandler():
         return (uniqueness >= self.parent.percent_unique)
 
     def cullFile(self):
-        cursor = self.db.cursor()
+        connection = sqlite3.connect(self.db_file)
+        cursor = connection.cursor()
         size = cursor.execute('select count(*)').fetchall()[0][0]
         if size > self.parent.cull_over:
             size_delete = size // 2
             cursor.execute('delete from messages where rowid < ?', (size_delete,))
-            self.db.commit()
+            connection.commit()
             cursor.execute('vacuum')
         cursor.close()
+        connection.close()
     
     def checkCull(self):
         now_time = datetime.datetime.now()
@@ -209,10 +211,12 @@ class channelHandler():
                     self.parent.config.save()
                     self.sendMessage("Clearing memory after every message! FeelsDankMan")
             elif cmd == 'wipe':
-                cursor = self.db.cursor()
+                connection = sqlite3.connect(self.db_file)
+                cursor = connection.cursor()
                 cursor.execute('delete from messages')
-                self.db.commit()
+                connection.commit()
                 cursor.close()
+                connection.close()
                 self.sendMessage("Wiped memory banks. D:")
             elif cmd == 'toggle':
                 if self.send_messages:
