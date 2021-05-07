@@ -43,7 +43,7 @@ class channelHandler():
     def initMessageDB(self):
         dir = os.path.join(os.path.dirname(__file__), 'messages')
         if not os.path.isdir(dir): os.mkdir(dir)
-        f = os.path.join(dir, f'{self.channel.lower()}')
+        f = os.path.join(dir, f'{self.channel.lower()}.db')
         self.db = sqlite3.connect(f)
         sqlite3.register_adapter(bool, int)
         sqlite3.register_converter("BOOLEAN", lambda v: bool(int(v)))
