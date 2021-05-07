@@ -178,7 +178,7 @@ class channelHandler():
     def cullFile(self):
         connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
         cursor = connection.cursor()
-        size = cursor.execute('select count(*)').fetchall()[0][0]
+        size = cursor.execute('select count(*) from messages').fetchall()[0][0]
         self.logger.debug(f'Size of messages: {size}')
         if size > self.parent.cull_over:
             size_delete = size // 2
