@@ -75,12 +75,16 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.logger.info(f'Twitch API client set up!')
 
     def authenticate_twitch(self, target_scope):
-        cli = webbrowser.get().name == 'www-browser'
-        if cli:
+        try:
+            cli = webbrowser.get().name == 'www-browser'
+            if cli:
+                self.token, self.refresh_token = authenticate(self.twitch, target_scope)
+            else:
+                auth = UserAuthenticator(self.twitch, target_scope, force_verify=False)
+                self.token, self.refresh_token = auth.authenticate()
+        except Exception as e:
+            self.logger.error(e)
             self.token, self.refresh_token = authenticate(self.twitch, target_scope)
-        else:
-            auth = UserAuthenticator(self.twitch, target_scope, force_verify=False)
-            self.token, self.refresh_token = auth.authenticate()
         self.save_oauth_token()
 
     def get_oauth_token(self):
