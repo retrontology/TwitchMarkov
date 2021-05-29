@@ -6,6 +6,8 @@ from twitchAPI.types import AuthScope
 from userAuth import authenticate
 from threading import Thread
 from time import sleep
+import itertools
+import more_itertools
 import webbrowser
 import re
 import irc.bot
@@ -134,9 +136,12 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.logger.debug(f'Refreshing OAuth Token')
         self.token = token
         self.refresh_token = refresh_token
-        irc.bot.SingleServerIRCBot.__init__(self, [(self.irc_server, self.irc_port, 'oauth:'+self.token)], self.username, self.username)
-        self._connect()
         self.save_oauth_token()
+        self.disconnect()
+        specs = map(irc.bot.ServerSpec.ensure, [(self.irc_server, self.irc_port, 'oauth:'+self.token)])
+        self.servers = more_itertools.peekable(itertools.cycle(specs))
+        self._connect()
+        self.logger.debug(f'Oauth Token is refreshed!')
 
     def checkBlacklisted(self, message):
         # Check words that the bot should NEVER learn.
