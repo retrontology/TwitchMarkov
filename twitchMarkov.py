@@ -70,6 +70,7 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.twitch.authenticate_app([])
         self.get_oauth_token()
         self.auth_thread = Thread(target=self.authentication_loop, args=(), daemon=True)
+        self.auth_thread.start()
         self.logger.info(f'Twitch API client set up!')
     
     def authentication_loop(self):
