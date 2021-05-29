@@ -5,12 +5,9 @@ from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope
 from userAuth import authenticate
 from threading import Thread
+from time import sleep
 import webbrowser
-import datetime
-import socket
-import markovify
 import re
-import traceback
 import irc.bot
 import logging
 import logging.handlers
@@ -72,7 +69,16 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.twitch.user_auth_refresh_callback = self.oauth_user_refresh
         self.twitch.authenticate_app([])
         self.get_oauth_token()
+        self.auth_thread = Thread(self.authentication_loop, (), daemon=True)
         self.logger.info(f'Twitch API client set up!')
+    
+    def authentication_loop(self):
+        while True:
+            sleep(24*60**2)
+            try:
+                self.twitch.refresh_used_token()
+            except Exception as e:
+                self.logger.error(e)
 
     def authenticate_twitch(self, target_scope):
         try:
