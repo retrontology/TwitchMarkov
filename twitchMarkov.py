@@ -1,6 +1,6 @@
 from markovHandler import markovHandler
 import retroBot
-from retroBot import config as markovConfig
+from retroBot.config import config as markovConfig
 import re
 import logging
 import logging.handlers
