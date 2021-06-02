@@ -3,3 +3,5 @@
 logs/*
 messages/*
 oauth/*
+.vscode/settings.json
+blacklist.txt

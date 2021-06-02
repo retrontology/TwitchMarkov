@@ -1,30 +1,28 @@
 from emoji import demojize
+import retroBot.channelHandler
+from retroBot.message import message
 import os
 import markovify
 import re
 import datetime
-import logging
 import sqlite3
 
-class channelHandler():
+class markovHandler(retroBot.channelHandler):
 
-    def __init__(self, channel, config, parent):
-        self.logger = logging.getLogger(f'markovBot.bot.{channel}')
-        self.logger.info(f'Initializing Channel Handler for {channel}')
-        self.channel = channel
-        self.parent = parent
-        self.user_id = self.parent.twitch.get_users(logins=[channel.lower()])['data'][0]['id']
+    def __init__(self, channel, parent):
+        super(markovHandler, self).__init__(channel, parent)
+        self.user_id = parent.twitch.get_users(logins=[channel.lower()])['data'][0]['id']
         self.message_count = 0
         self.initMessageDB()
         self.last_cull = datetime.datetime.now()
         self.phrases_list = []
-        self.clear_logs_after = config['clear_logs_after']
-        self.send_messages = config['send_messages']
-        self.unique = config['unique']
-        self.generate_on = config['generate_on']
-        self.ignored_users = [x.lower() for x in config['ignored_users']]
+        self.clear_logs_after = parent.config['twitch']['channels'][channel]['clear_logs_after']
+        self.send_messages = parent.config['twitch']['channels'][channel]['send_messages']
+        self.unique = parent.config['twitch']['channels'][channel]['unique']
+        self.generate_on = parent.config['twitch']['channels'][channel]['generate_on']
+        self.ignored_users = [x.lower() for x in self.parent.config['twitch']['channels'][channel]['ignored_users']]
         self.initCooldowns()
-
+        
     def initCooldowns(self):
         self.cooldowns = {}
         self.last_used = {}
@@ -51,44 +49,20 @@ class channelHandler():
         connection.close()
     
     def on_pubmsg(self, c, e):
-        msg = self.parse_msg_event(e)
-        if msg['name'].lower() in self.ignored_users:
+        msg = message(e)
+        if msg.username.lower() in self.ignored_users:
             pass
-        elif msg['content'][:1] == '!':
+        elif msg.content[:1] == '!':
             self.handleCommands(msg)
-        elif msg['content'].lower().find(f'@{self.parent.username.lower()}') != -1:
-            self.logger.info(f'{msg["name"]}: {msg["content"]}')
+        elif msg.content.lower().find(f'@{self.parent.username.lower()}') != -1:
+            self.logger.info(f'{msg.username}: {msg.content}')
             if (datetime.datetime.now() - self.last_used['reply']).total_seconds() >= self.cooldowns['reply']:
-                self.generateAndSendMessage(msg['name'])
+                self.generateAndSendMessage(msg.username)
                 self.last_used['reply'] = datetime.datetime.now()
         else:
             self.writeMessage(msg)
         if self.message_count >= self.generate_on:
             self.generateAndSendMessage()
-    
-    def parse_msg_event(self, event):
-        out = {}
-        for tag in event.tags:
-            if tag['key'] == "display-name":
-                out['name'] = tag['value']
-            elif tag['key'] == "user-id":
-                out['user_id'] = tag['value']
-            elif tag['key'] == "tmi-sent-ts":
-                out['time'] = datetime.datetime.fromtimestamp(float(tag['value'])/1000)
-            elif tag['key'] == 'badges':
-                out['broadcaster'] = tag['value'] == 'broadcaster/1'
-            elif tag['key'] == 'user-type':
-                out['mod'] = tag['value'] == '1'
-            elif tag['key'] == 'subscriber':
-                out['subscriber'] = tag['value'] == '1'
-        out['content'] = event.arguments[0]
-        if out['user_id'] == '54714257' or out['user_id'] == '37749713' or out['broadcaster']:
-            out['mod'] = True
-        return out
-                
-    def sendMessage(self, message):
-        self.logger.info(f'Sending: {message}')
-        self.parent.connection.privmsg('#' + self.channel, message)
     
     def generateMessage(self):
         connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
@@ -125,14 +99,13 @@ class channelHandler():
             if target != None:
                 markoved = f'@{target} {markoved}'
             self.logger.info(f'Generated: {markoved}')
-            if self.send_messages: self.sendMessage(markoved)
-                
+            if self.send_messages: self.send_message(markoved)
         else:
             self.logger.error("Could not generate.")
         self.checkCull()
 
     def writeMessage(self, msg):
-        message = self.filterMessage(msg['content'])
+        message = self.filterMessage(msg.content)
         if message != None and message:
             connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
             cursor = connection.cursor()
@@ -140,7 +113,7 @@ class channelHandler():
                 cursor.execute('delete from messages')
                 connection.commit()
                 cursor.execute('vacuum')
-            cursor.execute('insert into messages values (?, ?, ?, ?, ?)', (msg['time'], msg['user_id'], msg['name'], msg['mod'], message))
+            cursor.execute('insert into messages values (?, ?, ?, ?, ?)', (msg.time, msg.user_id, msg.username, msg.mod, message))
             connection.commit()
             cursor.close()
             connection.close()
@@ -200,14 +173,14 @@ class channelHandler():
             self.last_cull = datetime.datetime.now()
     
     def handleCommands(self, msg):
-        cmd = msg['content'].split(' ')[0][1:].lower()
+        cmd = msg.content.split(' ')[0][1:].lower()
         if cmd == 'commands' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds() >= self.cooldowns[cmd]:
             self.sendMessage('You can find a list of my commands here: https://retrohollow.com/markov/commands.html')
             self.last_used[cmd] = datetime.datetime.now()
         elif cmd == 'speak' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds() >= self.cooldowns[cmd]:
             self.generateAndSendMessage()
             self.last_used[cmd] = datetime.datetime.now()
-        if msg['mod'] or msg['broadcaster']:
+        if msg.mod or msg.broadcaster:
             if cmd == 'clear':
                 if self.clear_logs_after:
                     self.clear_logs_after = False
@@ -246,7 +219,7 @@ class channelHandler():
                     self.sendMessage("Messages will now be unique. PogU")
             elif cmd == 'setafter':
                 try:
-                    stringNum = msg['content'].split(' ')[1]
+                    stringNum = msg.content.split(' ')[1]
                     if stringNum != None:
                         num = int(stringNum)
                         if num <= 0:
