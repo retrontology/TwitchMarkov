@@ -1,5 +1,6 @@
 from emoji import demojize
 import retroBot.channelHandler
+from retroBot.message import message
 import os
 import markovify
 import re
@@ -48,15 +49,15 @@ class markovHandler(retroBot.channelHandler):
         connection.close()
     
     def on_pubmsg(self, c, e):
-        msg = self.parse_msg_event(e)
-        if msg['name'].lower() in self.ignored_users:
+        msg = message(e)
+        if msg.username.lower() in self.ignored_users:
             pass
-        elif msg['content'][:1] == '!':
+        elif msg.content[:1] == '!':
             self.handleCommands(msg)
-        elif msg['content'].lower().find(f'@{self.parent.username.lower()}') != -1:
-            self.logger.info(f'{msg["name"]}: {msg["content"]}')
+        elif msg.content.lower().find(f'@{self.parent.username.lower()}') != -1:
+            self.logger.info(f'{msg.username}: {msg.content}')
             if (datetime.datetime.now() - self.last_used['reply']).total_seconds() >= self.cooldowns['reply']:
-                self.generateAndSendMessage(msg['name'])
+                self.generateAndSendMessage(msg.username)
                 self.last_used['reply'] = datetime.datetime.now()
         else:
             self.writeMessage(msg)
@@ -104,7 +105,7 @@ class markovHandler(retroBot.channelHandler):
         self.checkCull()
 
     def writeMessage(self, msg):
-        message = self.filterMessage(msg['content'])
+        message = self.filterMessage(msg.content)
         if message != None and message:
             connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
             cursor = connection.cursor()
@@ -112,7 +113,7 @@ class markovHandler(retroBot.channelHandler):
                 cursor.execute('delete from messages')
                 connection.commit()
                 cursor.execute('vacuum')
-            cursor.execute('insert into messages values (?, ?, ?, ?, ?)', (msg['time'], msg['user_id'], msg['name'], msg['mod'], message))
+            cursor.execute('insert into messages values (?, ?, ?, ?, ?)', (msg.time, msg.user_id, msg.username, msg.mod, message))
             connection.commit()
             cursor.close()
             connection.close()
@@ -172,14 +173,14 @@ class markovHandler(retroBot.channelHandler):
             self.last_cull = datetime.datetime.now()
     
     def handleCommands(self, msg):
-        cmd = msg['content'].split(' ')[0][1:].lower()
+        cmd = msg.content.split(' ')[0][1:].lower()
         if cmd == 'commands' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds() >= self.cooldowns[cmd]:
             self.sendMessage('You can find a list of my commands here: https://retrohollow.com/markov/commands.html')
             self.last_used[cmd] = datetime.datetime.now()
         elif cmd == 'speak' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds() >= self.cooldowns[cmd]:
             self.generateAndSendMessage()
             self.last_used[cmd] = datetime.datetime.now()
-        if msg['mod'] or msg['broadcaster']:
+        if msg.mod or msg.broadcaster:
             if cmd == 'clear':
                 if self.clear_logs_after:
                     self.clear_logs_after = False
@@ -218,7 +219,7 @@ class markovHandler(retroBot.channelHandler):
                     self.sendMessage("Messages will now be unique. PogU")
             elif cmd == 'setafter':
                 try:
-                    stringNum = msg['content'].split(' ')[1]
+                    stringNum = msg.content.split(' ')[1]
                     if stringNum != None:
                         num = int(stringNum)
                         if num <= 0:
