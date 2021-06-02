@@ -175,7 +175,7 @@ class markovHandler(retroBot.channelHandler):
     def handleCommands(self, msg):
         cmd = msg.content.split(' ')[0][1:].lower()
         if cmd == 'commands' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds() >= self.cooldowns[cmd]:
-            self.sendMessage('You can find a list of my commands here: https://retrohollow.com/markov/commands.html')
+            self.send_message('You can find a list of my commands here: https://retrohollow.com/markov/commands.html')
             self.last_used[cmd] = datetime.datetime.now()
         elif cmd == 'speak' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds() >= self.cooldowns[cmd]:
             self.generateAndSendMessage()
@@ -185,11 +185,11 @@ class markovHandler(retroBot.channelHandler):
                 if self.clear_logs_after:
                     self.clear_logs_after = False
                     self.parent.config.save()
-                    self.sendMessage("No longer clearing memory after message! betch200IQ")
+                    self.send_message("No longer clearing memory after message! betch200IQ")
                 else:
                     self.clear_logs_after = True
                     self.parent.config.save()
-                    self.sendMessage("Clearing memory after every message! FeelsDankMan")
+                    self.send_message("Clearing memory after every message! FeelsDankMan")
             elif cmd == 'wipe':
                 connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
                 cursor = connection.cursor()
@@ -198,25 +198,25 @@ class markovHandler(retroBot.channelHandler):
                 cursor.execute('vacuum')
                 cursor.close()
                 connection.close()
-                self.sendMessage("Wiped memory banks. D:")
+                self.send_message("Wiped memory banks. D:")
             elif cmd == 'toggle':
                 if self.send_messages:
                     self.send_messages = False
                     self.parent.config.save()
-                    self.sendMessage("Messages will no longer be sent! D:")
+                    self.send_message("Messages will no longer be sent! D:")
                 else:
                     self.send_messages = True
                     self.parent.config.save()
-                    self.sendMessage("Messages are now turned on! :)")
+                    self.send_message("Messages are now turned on! :)")
             elif cmd == 'unique':
                 if self.unique:
                     self.unique = False
                     self.parent.config.save()
-                    self.sendMessage("Messages will no longer be unique. PogO")
+                    self.send_message("Messages will no longer be unique. PogO")
                 else:
                     self.unique = True
                     self.parent.config.save()
-                    self.sendMessage("Messages will now be unique. PogU")
+                    self.send_message("Messages will now be unique. PogU")
             elif cmd == 'setafter':
                 try:
                     stringNum = msg.content.split(' ')[1]
@@ -226,8 +226,8 @@ class markovHandler(retroBot.channelHandler):
                             raise Exception
                         self.generate_on = num
                         self.parent.config.save()
-                        self.sendMessage("Messages will now be sent after " + self.generate_on + " chat messages. DankG")
+                        self.send_message("Messages will now be sent after " + self.generate_on + " chat messages. DankG")
                 except:
-                        self.sendMessage("Current value: " + str(self.generate_on) + ". To set, use: setafter [number of messages]")
+                        self.send_message("Current value: " + str(self.generate_on) + ". To set, use: setafter [number of messages]")
             elif cmd == 'isalive':
-                self.sendMessage("Yeah, I'm alive and learning. betch2IQ")
+                self.send_message("Yeah, I'm alive and learning. betch2IQ")
