@@ -9,7 +9,7 @@ import sqlite3
 class markovHandler(retroBot.channelHandler):
 
     def __init__(self, channel, parent):
-        self.user_id = self.parent.twitch.get_users(logins=[channel.lower()])['data'][0]['id']
+        self.user_id = parent.twitch.get_users(logins=[channel.lower()])['data'][0]['id']
         self.message_count = 0
         self.initMessageDB()
         self.last_cull = datetime.datetime.now()
