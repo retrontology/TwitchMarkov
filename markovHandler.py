@@ -1,9 +1,9 @@
 from emoji import demojize
+import retroBot.channelHandler
 import os
 import markovify
 import re
 import datetime
-import logging
 import sqlite3
 
 class markovHandler(retroBot.channelHandler):
@@ -14,14 +14,14 @@ class markovHandler(retroBot.channelHandler):
         self.initMessageDB()
         self.last_cull = datetime.datetime.now()
         self.phrases_list = []
-        self.clear_logs_after = self.parent.config[channel]['clear_logs_after']
-        self.send_messages = self.parent.config[channel]['send_messages']
-        self.unique = self.parent.config[channel]['unique']
-        self.generate_on = self.parent.config[channel]['generate_on']
-        self.ignored_users = [x.lower() for x in self.parent.config[channel]['ignored_users']]
+        self.clear_logs_after = parent.config['twitch']['channels'][channel]['clear_logs_after']
+        self.send_messages = parent.config['twitch']['channels'][channel]['send_messages']
+        self.unique = parent.config['twitch']['channels'][channel]['unique']
+        self.generate_on = parent.config['twitch']['channels'][channel]['generate_on']
+        self.ignored_users = [x.lower() for x in self.parent.config['twitch']['channels'][channel]['ignored_users']]
         self.initCooldowns()
-        super(markovHandler, self).__init__()
-
+        super(markovHandler, self).__init__(channel, parent)
+        
     def initCooldowns(self):
         self.cooldowns = {}
         self.last_used = {}
@@ -98,8 +98,7 @@ class markovHandler(retroBot.channelHandler):
             if target != None:
                 markoved = f'@{target} {markoved}'
             self.logger.info(f'Generated: {markoved}')
-            if self.send_messages: self.sendMessage(markoved)
-                
+            if self.send_messages: self.send_message(markoved)
         else:
             self.logger.error("Could not generate.")
         self.checkCull()

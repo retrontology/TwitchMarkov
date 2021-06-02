@@ -1,7 +1,6 @@
 from markovHandler import markovHandler
 import retroBot
-from threading import Thread
-from time import sleep
+from retroBot import config as markovConfig
 import re
 import logging
 import logging.handlers
@@ -22,8 +21,6 @@ class markovBot(retroBot.retroBot):
         self.username = config['twitch']['username']
         self.client_id = config['twitch']['client_id']
         self.client_secret = config['twitch']['client_secret']
-        self.irc_server = config['twitch']['irc']['server']
-        self.irc_port = config['twitch']['irc']['port']
         for channel in config['twitch']['channels']:
             channel_config = config['twitch']['channels'][channel]
             for setting in config['markov']['defaults']:
@@ -46,7 +43,7 @@ class markovBot(retroBot.retroBot):
 
 
 def main():
-    logger = setup_logger('markovBot')
+    logger = setup_logger('retroBot')
     config = load_config(os.path.join(os.path.dirname(__file__), 'config.yaml'))
     bot = markovBot(config)
     bot.start()
