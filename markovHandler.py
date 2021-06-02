@@ -9,6 +9,7 @@ import sqlite3
 class markovHandler(retroBot.channelHandler):
 
     def __init__(self, channel, parent):
+        super(markovHandler, self).__init__(channel, parent)
         self.user_id = parent.twitch.get_users(logins=[channel.lower()])['data'][0]['id']
         self.message_count = 0
         self.initMessageDB()
@@ -20,7 +21,6 @@ class markovHandler(retroBot.channelHandler):
         self.generate_on = parent.config['twitch']['channels'][channel]['generate_on']
         self.ignored_users = [x.lower() for x in self.parent.config['twitch']['channels'][channel]['ignored_users']]
         self.initCooldowns()
-        super(markovHandler, self).__init__(channel, parent)
         
     def initCooldowns(self):
         self.cooldowns = {}
