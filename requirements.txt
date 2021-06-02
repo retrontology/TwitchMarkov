@@ -3,3 +3,4 @@ markovify
 emoji
 PyYAML
 twitchAPI
+retroBot
