@@ -1,27 +1,16 @@
-from markovConfig import markovConfig
-from channelHandler import channelHandler
-from twitchAPI.twitch import Twitch
-from twitchAPI.oauth import UserAuthenticator
-from twitchAPI.types import AuthScope
-from userAuth import authenticate
+from markovHandler import markovHandler
+import retroBot
 from threading import Thread
 from time import sleep
-import itertools
-import more_itertools
-import webbrowser
 import re
-import irc.bot
 import logging
 import logging.handlers
-import pickle
 import os
 
-
-class markovBot(irc.bot.SingleServerIRCBot):
+class markovBot(retroBot.retroBot):
 
     def __init__(self, config):
         self.config = config
-        self.logger = logging.getLogger("markovBot.bot")
         self.percent_unique = config['markov']['percent_unique']
         self.allow_mentions = config['markov']['allow_mentions']
         self.state_size = config['markov']['state_size']
@@ -33,115 +22,20 @@ class markovBot(irc.bot.SingleServerIRCBot):
         self.username = config['twitch']['username']
         self.client_id = config['twitch']['client_id']
         self.client_secret = config['twitch']['client_secret']
-        self.twitch_setup()
         self.irc_server = config['twitch']['irc']['server']
         self.irc_port = config['twitch']['irc']['port']
-        self.channel_handlers = {}
         for channel in config['twitch']['channels']:
             channel_config = config['twitch']['channels'][channel]
             for setting in config['markov']['defaults']:
                 if not setting in channel_config or not channel_config[setting]:
                     channel_config[setting] = config['markov']['defaults'][setting]
             self.config.save()
-            self.channel_handlers[channel.lower()] = channelHandler(channel.lower(), channel_config, self)
-        irc.bot.SingleServerIRCBot.__init__(self, [(self.irc_server, self.irc_port, 'oauth:'+self.token)], self.username, self.username)
-
-    def on_welcome(self, c, e):
-        c.cap('REQ', ':twitch.tv/membership')
-        c.cap('REQ', ':twitch.tv/tags')
-        c.cap('REQ', ':twitch.tv/commands')
-        for channel in self.channel_handlers:
-            c.join('#' + channel.lower())
-
-    def on_join(self, c, e):
-        self.logger.debug(f'Joined {e.target}!')
-
-    def on_pubmsg(self, c, e):
-        self.logger.debug(f'Passing message to {e.target[1:]} handler')
-        Thread(target=self.channel_handlers[e.target[1:]].on_pubmsg, args=(c, e, )).start()
+        super(markovBot, self).__init__(config['twitch']['username'], config['twitch']['client_id'], config['twitch']['client_secret'], config['twitch']['channels'], handler=markovHandler)
         
     def load_blacklist(self, blacklist_file):
         with open(blacklist_file, 'r') as f:
             words = [line.rstrip('\n') for line in f]
         return words
-    
-    def twitch_setup(self):
-        self.logger.info(f'Setting up Twitch API client...')
-        self.twitch = Twitch(self.client_id, self.client_secret)
-        self.twitch.user_auth_refresh_callback = self.oauth_user_refresh
-        self.twitch.authenticate_app([])
-        self.get_oauth_token()
-        self.auth_thread = Thread(target=self.authentication_loop, args=(), daemon=True)
-        self.auth_thread.start()
-        self.logger.info(f'Twitch API client set up!')
-    
-    def authentication_loop(self):
-        while True:
-            sleep(24*60**2)
-            try:
-                self.twitch.refresh_used_token()
-            except Exception as e:
-                self.logger.error(e)
-
-    def authenticate_twitch(self, target_scope):
-        try:
-            cli = webbrowser.get().name == 'www-browser'
-            if cli:
-                self.token, self.refresh_token = authenticate(self.twitch, target_scope)
-            else:
-                auth = UserAuthenticator(self.twitch, target_scope, force_verify=False)
-                self.token, self.refresh_token = auth.authenticate()
-        except Exception as e:
-            self.logger.error(e)
-            self.token, self.refresh_token = authenticate(self.twitch, target_scope)
-        self.save_oauth_token()
-
-    def get_oauth_token(self):
-        tokens = self.load_oauth_token()
-        target_scope = [AuthScope.CHAT_EDIT, AuthScope.CHAT_READ]
-        if tokens == None:
-            self.authenticate_twitch(target_scope)
-        else:
-            self.token = tokens[0]
-            self.refresh_token = tokens[1]
-        try:
-            self.twitch.set_user_authentication(self.token, target_scope, self.refresh_token)
-        except Exception as e:
-            self.logger.error(e)
-            self.authenticate_twitch(target_scope)
-            self.twitch.set_user_authentication(self.token, target_scope, self.refresh_token)
-
-    def save_oauth_token(self):
-        pickle_file = self.get_oauth_file()
-        with open(pickle_file, 'wb') as f:
-            pickle.dump((self.token, self.refresh_token), f)
-        self.logger.debug(f'OAuth Token has been saved')
-
-    def load_oauth_token(self):
-        pickle_file = self.get_oauth_file()
-        if os.path.exists(pickle_file):
-            with open(pickle_file, 'rb') as f:
-                out = pickle.load(f)
-            self.logger.debug(f'OAuth Token has been loaded')
-            return out
-        else: return None
-
-    def get_oauth_file(self):
-        pickle_dir = os.path.join(os.path.dirname(__file__), 'oauth')
-        if not os.path.exists(pickle_dir): os.mkdir(pickle_dir)
-        pickle = os.path.join(pickle_dir, f'{self.username}_oauth.pickle')
-        return pickle
-    
-    def oauth_user_refresh(self, token, refresh_token):
-        self.logger.debug(f'Refreshing OAuth Token')
-        self.token = token
-        self.refresh_token = refresh_token
-        self.save_oauth_token()
-        self.disconnect()
-        specs = map(irc.bot.ServerSpec.ensure, [(self.irc_server, self.irc_port, 'oauth:'+self.token)])
-        self.servers = more_itertools.peekable(itertools.cycle(specs))
-        self._connect()
-        self.logger.debug(f'Oauth Token is refreshed!')
 
     def checkBlacklisted(self, message):
         # Check words that the bot should NEVER learn.

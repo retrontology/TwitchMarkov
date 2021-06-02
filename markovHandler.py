@@ -6,24 +6,21 @@ import datetime
 import logging
 import sqlite3
 
-class channelHandler():
+class markovHandler(retroBot.channelHandler):
 
-    def __init__(self, channel, config, parent):
-        self.logger = logging.getLogger(f'markovBot.bot.{channel}')
-        self.logger.info(f'Initializing Channel Handler for {channel}')
-        self.channel = channel
-        self.parent = parent
+    def __init__(self, channel, parent):
         self.user_id = self.parent.twitch.get_users(logins=[channel.lower()])['data'][0]['id']
         self.message_count = 0
         self.initMessageDB()
         self.last_cull = datetime.datetime.now()
         self.phrases_list = []
-        self.clear_logs_after = config['clear_logs_after']
-        self.send_messages = config['send_messages']
-        self.unique = config['unique']
-        self.generate_on = config['generate_on']
-        self.ignored_users = [x.lower() for x in config['ignored_users']]
+        self.clear_logs_after = self.parent.config[channel]['clear_logs_after']
+        self.send_messages = self.parent.config[channel]['send_messages']
+        self.unique = self.parent.config[channel]['unique']
+        self.generate_on = self.parent.config[channel]['generate_on']
+        self.ignored_users = [x.lower() for x in self.parent.config[channel]['ignored_users']]
         self.initCooldowns()
+        super(markovHandler, self).__init__()
 
     def initCooldowns(self):
         self.cooldowns = {}
@@ -65,30 +62,6 @@ class channelHandler():
             self.writeMessage(msg)
         if self.message_count >= self.generate_on:
             self.generateAndSendMessage()
-    
-    def parse_msg_event(self, event):
-        out = {}
-        for tag in event.tags:
-            if tag['key'] == "display-name":
-                out['name'] = tag['value']
-            elif tag['key'] == "user-id":
-                out['user_id'] = tag['value']
-            elif tag['key'] == "tmi-sent-ts":
-                out['time'] = datetime.datetime.fromtimestamp(float(tag['value'])/1000)
-            elif tag['key'] == 'badges':
-                out['broadcaster'] = tag['value'] == 'broadcaster/1'
-            elif tag['key'] == 'user-type':
-                out['mod'] = tag['value'] == '1'
-            elif tag['key'] == 'subscriber':
-                out['subscriber'] = tag['value'] == '1'
-        out['content'] = event.arguments[0]
-        if out['user_id'] == '54714257' or out['user_id'] == '37749713' or out['broadcaster']:
-            out['mod'] = True
-        return out
-                
-    def sendMessage(self, message):
-        self.logger.info(f'Sending: {message}')
-        self.parent.connection.privmsg('#' + self.channel, message)
     
     def generateMessage(self):
         connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
