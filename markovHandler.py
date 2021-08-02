@@ -180,7 +180,7 @@ class markovHandler(retroBot.channelHandler):
         elif cmd == 'speak' and (datetime.datetime.now() - self.last_used[cmd]).total_seconds() >= self.cooldowns[cmd]:
             self.generateAndSendMessage()
             self.last_used[cmd] = datetime.datetime.now()
-        if msg.mod or msg.broadcaster or msg.user_id in ['54714257', '37749713']:
+        if msg.mod or msg.broadcaster or msg.user_id in [54714257, 37749713]:
             if cmd == 'clear':
                 if self.clear_logs_after:
                     self.clear_logs_after = False
