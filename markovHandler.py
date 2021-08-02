@@ -1,4 +1,4 @@
-from emoji import demojize
+from emoji import demojize, emojize
 import retroBot.channelHandler
 from retroBot.message import message
 import os
@@ -86,7 +86,7 @@ class markovHandler(retroBot.channelHandler):
             self.phrases_list.append(testMess)
         else:
             self.phrases_list = [testMess]
-        return testMess
+        return emojize(testMess)
 
     def generateAndSendMessage(self, target=None):
         try:
