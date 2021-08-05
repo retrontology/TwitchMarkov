@@ -4,7 +4,7 @@ import numpy as np
 from nltk import FreqDist
 import sqlite3
 
-HIDDEN_STATES = 128
+HIDDEN_STATES = 8
 DB_FILE = 'messages/rlly.db'
 DB_TIMEOUT = 10
 
@@ -15,18 +15,19 @@ cursor.close()
 connection.close()
 
 vocab = set('\n')
-words = []
-lengths = []
+words = list()
+lengths = list()
 for message in messages:
     w = message.split(' ')
     vocab.update([word for word in w])
     w.append('\n')
-    words.append(np.asarray(w, dtype=object))
+    words.extend(w)
     lengths.append(len(w))
+print(len(words))
 label_encoder = LabelEncoder()
 label_encoder.fit(list(vocab))
 
-sequences = label_encoder.transform(np.asarray(words, dtype=object))
+sequences = label_encoder.transform(words)
 features = np.fromiter(sequences, np.int64)
 features = np.atleast_2d(features).T
 freq_dist = FreqDist(sequences)
