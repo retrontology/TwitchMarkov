@@ -22,7 +22,7 @@ markov:
   times_to_try: 1000
   cull_over: 8000
   time_to_cull: 3600
-  blacklist_file: ''
+  blacklist_file: 'blacklist.txt'
   defaults:
     ignored_users:
         - 'nightbot'

@@ -41,8 +41,9 @@ class markovBot(retroBot.retroBot):
             logging.getLogger('retroBot').warning(f'Blacklist file not found, continuing without one: {blacklist_file}')
             return []
         with open(blacklist_file, 'r') as f:
-            words = [line.rstrip('\n') for line in f]
-        return [word for word in words if word]
+            # Strip blanks and # comments: an empty entry compiles to \b, which matches
+            # every message and would silently blacklist all of chat.
+            return [w for line in f if (w := line.strip()) and not w.startswith('#')]
 
     def checkBlacklisted(self, message):
         # Check words that the bot should NEVER learn.
