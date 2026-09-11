@@ -1,0 +1,122 @@
+n[i1!]gg
+n[i1!]gl
+n[e3]gro\b
+c[o0]on\b
+j[i1]gaboo
+p[o0]rch monkey
+sand n
+spic\b
+sp[i1]cs\b
+wetback
+beaner
+gook\b
+chink
+ch[i1]nks\b
+zipperhead
+slant[- ]?eye
+towel ?head
+sand ?n[i1]gg
+raghead
+kike
+k[i1]kes\b
+heeb\b
+yid\b
+shylock
+wop\b
+dago\b
+polack
+gyp(sy|sies)\b
+gypped
+redskin
+inj[u1]n\b
+prairie n
+coolie\b
+curry ?muncher
+paki\b
+pakis\b
+f[a4@]g
+f[a4@]gg
+fagg?ot
+f[a4@]gs\b
+d[y1]ke\b
+d[y1]kes\b
+h[o0]mo\b
+tr[a4]nn
+shemale
+ladyboy
+he ?she\b
+it/its
+p[e3]d[o0]\b
+p[e3]doph
+pedos\b
+molest
+rape\b
+raping
+rapist
+r[e3]t[a4]rd
+tard\b
+tards\b
+mongoloid
+spaz
+spastic
+cripple\b
+midget
+autis(t|tic)\b
+sperg
+downie\b
+kill your ?self
+k[iy]s\b
+kms\b
+neck ?your ?self
+hang your ?self
+slit your
+end your ?life
+drink bleach
+gas chamber
+h[i1]tler
+sieg heil
+1488\b
+14/?88\b
+white ?power
+white ?genocide
+great replacement
+blood and soil
+race ?war
+lynch\b
+lynching
+holocaust didn
+final solution
+groyper
+free ?followers
+free ?viewers
+cheap ?viewers
+buy ?followers
+best ?viewers
+bigfollows
+streamboo
+followz
+viewerlabs
+hoktv
+stormtv
+promo ?code
+gift ?card
+crypto ?giveaway
+free ?nitro
+discord ?nitro
+steam ?gift
+click ?here
+bit\.ly
+tinyurl
+grabify
+iplogger
+ip ?logger
+ip ?grabber
+doxx?
+doxx?ed
+doxx?ing
+swat(ting|ted)\b
+your ?address is
+social security number
+credit ?card ?number
+seed ?phrase
+private ?key

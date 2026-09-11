@@ -3,7 +3,67 @@
 ## Description
 This is fork of [metalgearsvt](https://github.com/metalgearsvt)'s Twitch Markov bot [TwitchMarkov](https://github.com/metalgearsvt/TwitchMarkov). I've refactored it to use my Twitch bot package [retroBot](https://github.com/retrontology/retroBot). This allows for one instance to work in multiple, separate channels while only running one instance. It has also be updated to use sqlite as the message DB instead of storing them as a plain text file.
 
-## Setup
+## Running with Docker (recommended)
+
+All mutable state — config, message databases, logs and the Twitch OAuth token — lives
+in a single `./data` directory bind-mounted into the container, so it survives image
+rebuilds, container recreation and `docker compose down -v`.
+
+### 1. Create the data directory and a config
+
+```
+mkdir -p data
+docker compose up
+```
+
+The first run copies a starter `config.yaml` into `./data/` and exits. Fill in
+`twitch.client_id`, `twitch.client_secret`, `twitch.username` and your channels — see
+the [Config file](#config-file) section below for what each value means.
+
+### 2. Authorize with Twitch (one time)
+
+The bot needs a user OAuth token, and obtaining one is interactive. Run:
+
+```
+docker compose run --rm -it twitchmarkov
+```
+
+Follow the printed URL, authorize, and paste the code back. The token is saved to
+`./data/.local/share/retroBot/` and reused from then on.
+
+If you skip this step, a detached start will log the command above and exit rather than
+hanging on an invisible prompt.
+
+### 3. Start the bot
+
+```
+docker compose up -d
+docker compose logs -f
+```
+
+The container restarts automatically unless you stop it. If it restarts repeatedly,
+check `docker compose logs` — a bad config or a missing token exits on purpose.
+
+### Layout of `./data`
+
+```
+data/
+  config.yaml                                  # the bot rewrites this at runtime
+  blacklist.txt                                # optional; see markov.blacklist_file
+  messages/<channel>.db                        # per-channel Markov corpus
+  logs/retroBot                                # rotating logs
+  .local/share/retroBot/<username>_oauth.pickle
+```
+
+Back up `./data` and you have backed up the bot.
+
+### Permissions
+
+The container runs as uid 1000. If `./data` is owned by another user, the bot will say
+so and exit; fix it with `sudo chown -R 1000:1000 ./data`.
+
+## Running without Docker
+
 ### Install dependencies
 Simply install the dependencies located in the [requirement.txt](https://github.com/retrontology/TwitchMarkov/blob/main/requirements.txt) file:
 ```
@@ -51,8 +111,22 @@ markov:
     generate_on: The amount of messages that will trigger the bot to post. AKA the interval (Positive Integer)
 ```
 
-## Run
+### Run
 To run the bot you simply need to run the following file with python (after the setup steps above have been completed):
 ```
-python3 TwitchMarkov.py
+python3 twitchMarkov.py
 ```
+
+By default the bot keeps its config, `logs/` and `messages/` next to the source files,
+exactly as before. Two optional environment variables override that (the Docker image
+sets both to `/data`):
+
+| Variable | Default | Controls |
+| --- | --- | --- |
+| `MARKOV_CONFIG` | `config.yaml` next to the source | config file location |
+| `MARKOV_DATA_DIR` | the source directory | parent of `logs/` and `messages/`, and the base for a relative `blacklist_file` |
+
+### A note on dependency versions
+`requirements.txt` is pinned. The bot targets the **synchronous twitchAPI 2.x** API;
+twitchAPI 3.0 and later are async and are not compatible with this code, so installing
+unpinned dependencies will produce a bot that fails on startup.

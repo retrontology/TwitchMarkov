@@ -1,6 +1,7 @@
 from emoji import demojize, emojize
 import retroBot.channelHandler
 from retroBot.message import message
+from paths import get_messages_dir
 import os
 import markovify
 import re
@@ -35,9 +36,7 @@ class markovHandler(retroBot.channelHandler):
 
     def initMessageDB(self):
         self.db_timeout = 10
-        dir = os.path.join(os.path.dirname(__file__), 'messages')
-        if not os.path.isdir(dir): os.mkdir(dir)
-        self.db_file = os.path.join(dir, f'{self.channel.lower()}.db')
+        self.db_file = os.path.join(get_messages_dir(), f'{self.channel.lower()}.db')
         connection = sqlite3.connect(self.db_file, timeout=self.db_timeout)
         sqlite3.register_adapter(bool, int)
         sqlite3.register_converter("BOOLEAN", lambda v: bool(int(v)))

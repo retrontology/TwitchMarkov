@@ -1,0 +1,20 @@
+services:
+  twitchmarkov:
+    build: .
+    image: twitchmarkov:latest
+    container_name: twitchmarkov
+    restart: unless-stopped
+    # A bind mount, not a named volume: bot state (config, message databases,
+    # OAuth token) survives `docker compose down -v` and image rebuilds.
+    volumes:
+      - ./data:/data
+    # Deliberately no `tty:`/`stdin_open:` here. A TTY on the long-running
+    # service would make sys.stdin.isatty() true under `up -d`, defeating the
+    # no-token guard in twitchMarkov.check_oauth() and hanging on input().
+    # The one-time authorization uses `docker compose run --rm -it`, which
+    # allocates its own TTY.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
