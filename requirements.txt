@@ -1,6 +1,11 @@
-irc
-markovify
-emoji
-PyYAML
-twitchAPI
-retroBot
+# Pinned deliberately. The bot targets the synchronous twitchAPI 2.x API
+# (twitchAPI.types.AuthScope, Twitch(id, secret), get_users(...)['data']).
+# twitchAPI 3.x+ is async and breaks this code, and retroBot does not
+# constrain it, so the pin below is load-bearing.
+twitchAPI==2.5.3
+retroBot==0.3.4
+irc==20.5.0
+markovify==0.9.4
+emoji==2.15.0
+PyYAML==6.0.3
+appdirs==1.4.4

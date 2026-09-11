@@ -1,0 +1,17 @@
+.git
+.gitignore
+.vscode
+docs
+html
+data
+logs
+messages
+oauth
+blacklist.txt
+*.pyc
+*.bak
+__pycache__
+Dockerfile
+docker-compose.yml
+.dockerignore
+README.md

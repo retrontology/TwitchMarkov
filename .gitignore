@@ -5,3 +5,4 @@ messages/*
 oauth/*
 .vscode/settings.json
 blacklist.txt
+data/

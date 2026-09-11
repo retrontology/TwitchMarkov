@@ -1,10 +1,13 @@
 from markovHandler import markovHandler
 import retroBot
 from retroBot.config import config as markovConfig
+from appdirs import user_data_dir
+from paths import get_config_file, get_logs_dir, resolve_data_path
 import re
 import logging
 import logging.handlers
 import os
+import sys
 
 class markovBot(retroBot.retroBot):
 
@@ -30,9 +33,16 @@ class markovBot(retroBot.retroBot):
         super(markovBot, self).__init__(config['twitch']['username'], config['twitch']['client_id'], config['twitch']['client_secret'], config['twitch']['channels'], handler=markovHandler)
         
     def load_blacklist(self, blacklist_file):
+        # An unset blacklist is valid: the shipped config leaves it empty.
+        if not blacklist_file:
+            return []
+        blacklist_file = resolve_data_path(blacklist_file)
+        if not os.path.isfile(blacklist_file):
+            logging.getLogger('retroBot').warning(f'Blacklist file not found, continuing without one: {blacklist_file}')
+            return []
         with open(blacklist_file, 'r') as f:
             words = [line.rstrip('\n') for line in f]
-        return words
+        return [word for word in words if word]
 
     def checkBlacklisted(self, message):
         # Check words that the bot should NEVER learn.
@@ -42,9 +52,25 @@ class markovBot(retroBot.retroBot):
         return False
 
 
+def check_oauth(username):
+    # retroBot stores its token pickle under appdirs; mirror that path so we can fail
+    # fast instead of blocking on the interactive input() inside userAuth.
+    token_file = os.path.join(user_data_dir('retroBot', 'retrontology'), f'{username}_oauth.pickle')
+    if os.path.exists(token_file) or sys.stdin.isatty():
+        return
+    logger = logging.getLogger('retroBot')
+    logger.error(f'No Twitch OAuth token found at {token_file} and no terminal is attached to authorize one.')
+    logger.error('Run the one-time interactive authorization first: docker compose run --rm -it twitchmarkov')
+    sys.exit(1)
+
 def main():
     logger = setup_logger('retroBot')
-    config = load_config(os.path.join(os.path.dirname(__file__), 'config.yaml'))
+    config_file = get_config_file()
+    if not os.path.isfile(config_file):
+        logger.error(f'Config file not found: {config_file}')
+        sys.exit(1)
+    config = load_config(config_file)
+    check_oauth(config['twitch']['username'])
     bot = markovBot(config)
     bot.start()
 
@@ -55,11 +81,10 @@ def load_config(filename):
 
 def setup_logger(logname, logpath=""):
     if not logpath or logpath == "":
-        logpath = os.path.join(os.path.dirname(__file__), 'logs')
+        logpath = get_logs_dir()
     else:
         logpath = os.path.abspath(logpath)
-    if not os.path.exists(logpath):
-        os.mkdir(logpath)
+        os.makedirs(logpath, exist_ok=True)
     logger = logging.getLogger(logname)
     logger.setLevel(logging.DEBUG)
     file_handler = logging.handlers.TimedRotatingFileHandler(os.path.join(logpath, logname), when='midnight')
