@@ -5,3 +5,6 @@ messages/*
 oauth/*
 .vscode/settings.json
 data/
+.venv/
+.superpowers/
+*.egg-info/

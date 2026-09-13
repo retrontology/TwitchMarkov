@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "twitchmarkov"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "twitchAPI==4.5.0",
+    "markovify==0.9.4",
+    "emoji==2.15.0",
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite",
+    "aiomysql",
+    "alembic",
+    "pydantic-settings",
+    "itsdangerous",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+]
+
+[tool.setuptools.packages.find]
+include = ["twitchmarkov*"]
+
+[tool.setuptools.package-data]
+twitchmarkov = ["web/static/*", "db/migrations/*", "db/migrations/versions/*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
