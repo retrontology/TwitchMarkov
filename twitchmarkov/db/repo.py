@@ -78,6 +78,8 @@ async def upsert_bot_account(
 
 async def update_bot_tokens(session: AsyncSession, access_token: str, refresh_token: str) -> None:
     account = await session.get(BotAccount, 1)
+    if account is None:
+        return
     account.access_token = access_token
     account.refresh_token = refresh_token
     account.updated_at = datetime.now(UTC)
@@ -86,6 +88,8 @@ async def update_bot_tokens(session: AsyncSession, access_token: str, refresh_to
 
 async def set_bot_account_valid(session: AsyncSession, valid: bool) -> None:
     account = await session.get(BotAccount, 1)
+    if account is None:
+        return
     account.valid = valid
     account.updated_at = datetime.now(UTC)
     await session.commit()

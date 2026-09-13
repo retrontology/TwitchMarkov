@@ -74,6 +74,16 @@ async def test_bot_account_lifecycle(session: AsyncSession):
     assert await repo.get_bot_account(session) is None
 
 
+async def test_update_bot_tokens_is_noop_when_no_account(session: AsyncSession):
+    await repo.update_bot_tokens(session, access_token="a", refresh_token="r")
+    assert await repo.get_bot_account(session) is None
+
+
+async def test_set_bot_account_valid_is_noop_when_no_account(session: AsyncSession):
+    await repo.set_bot_account_valid(session, True)
+    assert await repo.get_bot_account(session) is None
+
+
 # --- defaults / channels ---
 
 
