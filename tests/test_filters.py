@@ -19,7 +19,7 @@ class TestCompileBlacklist:
         """Invalid regex patterns should be skipped with a warning logged."""
         patterns = compile_blacklist(["(", "ok"])
         assert len(patterns) == 1
-        assert "(" in caplog.text or "error" in caplog.text.lower()
+        assert any(record.levelname == "WARNING" and "(" in record.message for record in caplog.records)
 
     def test_word_boundary_matching(self):
         """Patterns should use word boundary \\b for matching."""
@@ -193,3 +193,46 @@ class TestFilterMessage:
         )
         # emoji demojized, url stripped, whitespace collapsed
         assert result == "hi there :grinning_face: check"
+
+    def test_pipeline_order_blacklist_before_url_stripping(self):
+        """Blacklist check must run before URL stripping.
+
+        If blacklisted term is inside a URL, it should be caught by blacklist
+        before the URL is stripped. Similarly for mentions when allow_mentions=False.
+        """
+        patterns = compile_blacklist(["badword"])
+
+        # Blacklisted term inside URL should be rejected
+        result = filter_message(
+            "see http://badword.example",
+            patterns=patterns,
+            allow_mentions=True,
+            percent_unique=0
+        )
+        assert result is None
+
+        # Blacklisted term inside mention should be rejected (even before mention stripping)
+        result = filter_message(
+            "hi @badword",
+            patterns=patterns,
+            allow_mentions=False,
+            percent_unique=0
+        )
+        assert result is None
+
+    def test_pipeline_order_demojize_before_blacklist(self):
+        """Demojize must run before blacklist check.
+
+        If a blacklist pattern matches the demojized form of an emoji,
+        the pattern should match. This requires demojize to run first.
+        """
+        patterns = compile_blacklist(["grinning_face"])
+
+        # Pattern should match the demojized emoji
+        result = filter_message(
+            "hi 😀",
+            patterns=patterns,
+            allow_mentions=True,
+            percent_unique=0
+        )
+        assert result is None
