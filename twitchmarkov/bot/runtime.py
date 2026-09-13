@@ -119,6 +119,10 @@ class ChannelRuntime:
     async def generate(
         self, *, target: str | None = None, send: bool | None = None, trigger: str = "api"
     ) -> str | None:
+        # Reset first (even on failure) so an in-flight generation can't be
+        # re-triggered by messages that arrive while it's still running.
+        self.messages_since_generate = 0
+
         async with self.session_factory() as session:
             corpus = await repo.corpus(session, self.channel_id)
 
@@ -129,8 +133,6 @@ class ChannelRuntime:
             unique=self.settings["unique"],
             recent=self.recent_phrases,
         )
-
-        self.messages_since_generate = 0
 
         if content is None:
             self.logger.warning("Could not generate.")

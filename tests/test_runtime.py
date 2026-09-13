@@ -111,6 +111,31 @@ async def test_three_messages_trigger_one_generate_and_reset_counter(
     assert rows[0].target is None
 
 
+async def test_counter_reset_happens_before_generation_starts(
+    session_factory, session, channel, monkeypatch
+):
+    """The counter must hit 0 before generate_sentence is awaited, not after.
+
+    Otherwise a message that arrives while a slow generation is still in
+    flight can see a stale, still-elevated counter and re-trigger another
+    interval generate.
+    """
+    rt, sender, clock = await make_runtime(session_factory, bot_login="")
+    rt.messages_since_generate = 5
+
+    observed_counter_during_generation = []
+
+    async def fake_generate_sentence(corpus, **kwargs):
+        observed_counter_during_generation.append(rt.messages_since_generate)
+        return "a generated sentence"
+
+    monkeypatch.setattr(runtime_module, "generate_sentence", fake_generate_sentence)
+
+    await rt.generate(trigger="api")
+
+    assert observed_counter_during_generation == [0]
+
+
 async def test_send_messages_false_records_but_does_not_send(
     session_factory, session, channel, monkeypatch
 ):
@@ -223,6 +248,22 @@ async def test_setafter_valid_value_sets_generate_on(session_factory, session, c
     await session.refresh(channel)
     assert channel.generate_on == 10
     assert rt.settings["generate_on"] == 10
+
+
+@pytest.mark.parametrize("text", ["!setafter 0", "!setafter -5", "!setafter"])
+async def test_setafter_non_positive_or_missing_sends_current_value_copy(
+    session_factory, session, channel, text
+):
+    await repo.update_settings(session, channel, {"generate_on": 35})
+    rt, sender, clock = await make_runtime(session_factory, bot_login="")
+
+    await rt.handle_message(make_msg(username="mod", text=text, is_mod=True))
+
+    assert sender.sent == [
+        ("chan", "Current value: 35. To set, use: setafter [number of messages]")
+    ]
+    await session.refresh(channel)
+    assert channel.generate_on == 35
 
 
 async def test_wipe_empties_messages(session_factory, session, channel):
