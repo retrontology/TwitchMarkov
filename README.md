@@ -54,6 +54,11 @@ Then:
 
 `docker compose logs -f` follows the bot's logs.
 
+`docker-compose.yml` uses the long `env_file:` form with `required: false`
+(so `docker compose build` works before `.env` exists), which needs Docker
+Compose **2.24 or newer**. On an older Compose, replace that block with the
+short form (`env_file: [.env]`) and create `.env` first.
+
 ### Layout of `./data`
 
 ```
@@ -94,7 +99,10 @@ MariaDB instead:
 
    The `mariadb` service is only defined under this profile, so a plain
    `docker compose up -d` never starts it — start it (or wait for it to
-   become healthy) before or alongside the app.
+   become healthy) before or alongside the app. The app does not retry a
+   failed database connection: if MariaDB isn't up yet the container exits
+   and Compose's `restart: unless-stopped` policy starts it again until the
+   database is ready.
 
 MariaDB's own data lives under `./data/mariadb`, also a bind mount.
 
@@ -193,3 +201,13 @@ are gone — recreate channels, settings and blacklists from the web UI after
 upgrading. Old `data/messages/<channel>.db` corpus files from the previous
 version are not read by this version; each channel starts with an empty
 corpus and rebuilds its corpus from chat as it goes.
+
+The old curated `blacklist.txt` is still in this repository's git history:
+
+```sh
+git show 7cded9e:blacklist.txt
+```
+
+Its contents can be pasted straight into the global blacklist textarea in
+the **Admin** view (one pattern per line; blank lines and `#` comments are
+ignored).

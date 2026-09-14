@@ -6,6 +6,9 @@ Numeric bounds on the 14 per-channel settings are expressed with
 without duplicating validator logic. ``ignored_users`` needs real
 normalization (lowercase/strip/dedupe), so it gets a single shared helper
 function used by a thin ``field_validator`` on each class.
+
+``BlacklistIn`` is shared by the per-channel and the global blacklist routes,
+so validating patterns on the schema covers both.
 """
 
 import re
@@ -149,6 +152,23 @@ class GeneratedOut(BaseModel):
 
 class BlacklistIn(BaseModel):
     patterns: list[str]
+
+    @field_validator("patterns")
+    @classmethod
+    def _validate_patterns(cls, value: list[str]) -> list[str]:
+        for raw in value:
+            stripped = raw.strip()
+            # Blank lines and comments are dropped by repo.set_blacklist and
+            # never compiled, so they need no validation.
+            if not stripped or stripped.startswith("#"):
+                continue
+            try:
+                # Same shape the bot compiles with (see bot/filters.py), so a
+                # pattern accepted here is a pattern the bot can use.
+                re.compile(r"\b" + stripped)
+            except re.error as exc:
+                raise ValueError(f"invalid regex pattern {stripped!r}: {exc}") from exc
+        return value
 
 
 class BlacklistOut(BaseModel):

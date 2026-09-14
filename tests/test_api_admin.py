@@ -213,3 +213,20 @@ async def test_put_blacklist_reload_failure_is_best_effort(
     assert response.json() == {"patterns": ["bad"]}
     assert attempted == [chan1.id, chan2.id]
     assert await repo.get_blacklist(session, None) == ["bad"]
+
+
+async def test_put_global_blacklist_rejects_invalid_regex(client, app, defaults_row):
+    login_as(client, app, ADMIN_ID, ADMIN_LOGIN, "Admin")
+
+    response = await client.put("/api/blacklist", json={"patterns": ["ok", "("]})
+
+    assert response.status_code == 422
+    assert "(" in str(response.json()["detail"])
+
+
+async def test_put_global_blacklist_allows_comments_and_blank_lines(client, app, defaults_row):
+    login_as(client, app, ADMIN_ID, ADMIN_LOGIN, "Admin")
+
+    response = await client.put("/api/blacklist", json={"patterns": ["# a ( comment", "", "ok"]})
+
+    assert response.status_code == 200

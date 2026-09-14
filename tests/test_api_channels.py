@@ -458,3 +458,16 @@ async def test_get_blacklist_returns_channel_patterns(client, app, session, defa
 
     assert response.status_code == 200
     assert response.json()["patterns"] == ["foo"]
+
+
+async def test_put_blacklist_rejects_invalid_regex(client, app, session, defaults_row):
+    await make_channel(session, id="1", login="chan")
+    await repo.set_blacklist(session, "1", ["old"])
+    login_as(client, app, ADMIN_ID, ADMIN_LOGIN, "Admin One")
+
+    response = await client.put("/api/channels/1/blacklist", json={"patterns": ["("]})
+
+    assert response.status_code == 422
+    assert "(" in str(response.json()["detail"])
+    # The stored blacklist is untouched by a rejected request.
+    assert await repo.get_blacklist(session, "1") == ["old"]

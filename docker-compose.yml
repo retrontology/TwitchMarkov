@@ -24,7 +24,9 @@ services:
     # No `depends_on: mariadb` here on purpose: an unconditional dependency
     # would pull the `mariadb` service (and its profile) into every `up`,
     # even for the default sqlite setup. If you use the `mysql` profile,
-    # start mariadb first (or rely on the app's own retry/backoff) — see the
+    # start mariadb first: the app does NOT retry a failed database
+    # connection itself — it exits, and `restart: unless-stopped` above is
+    # what keeps retrying until mariadb accepts connections. See the
     # README's MySQL/MariaDB section.
 
   # Optional MariaDB backend. Only started with `--profile mysql`:
