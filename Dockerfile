@@ -11,8 +11,13 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /build
 COPY pyproject.toml README.md ./
+# Install with only a stub package present so this layer only depends on
+# pyproject.toml/README.md and caches across changes to twitchmarkov/'s
+# source — dependencies aren't reinstalled on every source edit.
+RUN mkdir -p twitchmarkov && touch twitchmarkov/__init__.py \
+    && pip install . && pip uninstall -y twitchmarkov
 COPY twitchmarkov ./twitchmarkov
-RUN pip install .
+RUN pip install --no-deps .
 
 # --- runtime stage ---
 FROM python:3.12-slim

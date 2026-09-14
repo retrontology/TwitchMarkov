@@ -33,6 +33,14 @@ mkdir -p data
 docker compose up -d
 ```
 
+The container runs as uid 1000. If `./data` already existed before this
+step and is owned by another user, the app will fail to write its database
+and logs; fix it with:
+
+```sh
+sudo chown -R 1000:1000 ./data
+```
+
 Then:
 
 1. Open `PUBLIC_URL` (`http://localhost:8000` by default) in a browser and
@@ -46,13 +54,15 @@ Then:
 
 `docker compose logs -f` follows the bot's logs.
 
-### Permissions
+### Layout of `./data`
 
-The container runs as uid 1000. If `./data` already exists and is owned by
-another user, the app will fail to write its database/logs; fix it with:
-
-```sh
-sudo chown -R 1000:1000 ./data
+```
+data/
+  twitchmarkov.db     # SQLite database (unless DATABASE_URL points elsewhere)
+  logs/
+    twitchmarkov.log       # current log file, rotated daily, 14 days kept
+    twitchmarkov.log.*     # rotated-out logs
+  mariadb/            # only present when using the `mysql` compose profile
 ```
 
 ### Backing up
@@ -118,13 +128,13 @@ Compose).
 | `TWITCH_CLIENT_SECRET` | yes | | Twitch application client secret |
 | `TWITCHMARKOV_ADMINS` | yes | | Comma-separated Twitch logins allowed to administer the bot |
 | `PUBLIC_URL` | no | `http://localhost:8000` | Base URL used to build the OAuth redirect (`PUBLIC_URL/auth/callback`) and chat links |
-| `DATABASE_URL` | no | `sqlite+aiosqlite:///./data/twitchmarkov.db` | SQLAlchemy async URL. Docker image default: `sqlite+aiosqlite:////data/twitchmarkov.db`. MySQL example: `mysql+aiomysql://twitchmarkov:secret@mariadb:3306/twitchmarkov` |
+| `DATABASE_URL` | no | `sqlite+aiosqlite:///./data/twitchmarkov.db` | SQLAlchemy async URL. The default SQLite path is relative to the working directory the bot runs from, and is **independent of `DATA_DIR`** — it does not move if you only set `DATA_DIR`. Docker image default: `sqlite+aiosqlite:////data/twitchmarkov.db` (the image sets both `DATABASE_URL` and `DATA_DIR` to `/data`). MySQL example: `mysql+aiomysql://twitchmarkov:secret@mariadb:3306/twitchmarkov` |
 | `SESSION_SECRET` | no | generated once, stored in the DB | Signs session cookies |
 | `ALLOW_SELF_SERVICE` | no | `false` | Let non-admin broadcasters add/remove their own channel |
 | `LOG_LEVEL` | no | `INFO` | |
 | `HOST` | no | `0.0.0.0` | |
 | `PORT` | no | `8000` | |
-| `DATA_DIR` | no | `./data` | SQLite file (if used) and logs live under here, at `DATA_DIR/logs/` |
+| `DATA_DIR` | no | `./data` | Directory for log files (`DATA_DIR/logs/`) only — does **not** affect where the SQLite database goes; that's controlled solely by `DATABASE_URL` |
 
 See `.env.example` for a copy-pasteable template.
 
