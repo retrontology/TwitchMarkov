@@ -52,13 +52,17 @@ async def defaults_row(session: AsyncSession) -> ChannelDefaults:
 
 
 class FakeSender:
-    """Test double for bot.types.Sender: records every send instead of hitting Twitch."""
+    """Test double for bot.types.Sender: records every send instead of hitting
+    Twitch. ``result`` controls what send() reports back (False models a send
+    dropped because the bot isn't connected)."""
 
-    def __init__(self) -> None:
+    def __init__(self, result: bool = True) -> None:
         self.sent: list[tuple[str, str]] = []
+        self.result = result
 
-    async def send(self, channel_login: str, text: str) -> None:
+    async def send(self, channel_login: str, text: str) -> bool:
         self.sent.append((channel_login, text))
+        return self.result
 
 
 async def make_channel(session: AsyncSession, id: str = "1", login: str = "chan") -> Channel:

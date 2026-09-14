@@ -7,6 +7,7 @@ from typing import Protocol
 class InboundMessage:
     user_id: str
     username: str
+    login: str
     is_mod: bool
     is_broadcaster: bool
     sent_at: datetime
@@ -25,4 +26,7 @@ class RuntimeStats:
 
 
 class Sender(Protocol):
-    async def send(self, channel_login: str, text: str) -> None: ...
+    async def send(self, channel_login: str, text: str) -> bool:
+        """Send ``text`` to ``channel_login``. Returns True if the message
+        actually went out, False if it was dropped (e.g. not connected)."""
+        ...

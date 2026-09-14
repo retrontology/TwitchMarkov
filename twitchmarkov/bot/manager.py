@@ -11,7 +11,14 @@ from typing import TypedDict
 
 from twitchAPI.chat import Chat
 from twitchAPI.twitch import Twitch
-from twitchAPI.type import AuthScope, ChatEvent
+from twitchAPI.type import (
+    AuthScope,
+    ChatEvent,
+    InvalidRefreshTokenException,
+    InvalidTokenException,
+    MissingScopeException,
+    UnauthorizedException,
+)
 
 from twitchmarkov.bot.runtime import ChannelRuntime
 from twitchmarkov.bot.types import InboundMessage, RuntimeStats
@@ -21,6 +28,20 @@ from twitchmarkov.settings import Settings
 logger = logging.getLogger("twitchmarkov.bot.manager")
 
 _CHAT_SCOPES = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
+
+# Only these mean "the stored bot token is no good"; anything else (a network
+# blip, a Twitch 5xx) must not invalidate the account and force a re-auth.
+_AUTH_EXCEPTIONS = (
+    InvalidTokenException,
+    MissingScopeException,
+    InvalidRefreshTokenException,
+    UnauthorizedException,
+)
+
+# ``Chat.start()`` blocks until the IRC handshake completes and retries its
+# connection internally, so a Twitch outage would otherwise hang startup
+# forever. Module-level so tests can shorten it.
+CHAT_START_TIMEOUT = 120
 
 
 class BotStatus(TypedDict):
@@ -37,12 +58,19 @@ class _ChatSender:
     def __init__(self, manager: "BotManager") -> None:
         self._manager = manager
 
-    async def send(self, channel_login: str, text: str) -> None:
+    async def send(self, channel_login: str, text: str) -> bool:
         manager = self._manager
         if manager.chat is None or manager.state != "connected":
             logger.warning("Not connected; dropping message for %s", channel_login)
-            return
-        await manager.chat.send_message(channel_login, text)
+            return False
+        try:
+            await manager.chat.send_message(channel_login, text)
+        except Exception as exc:
+            # Chat.send_message raises ValueError("bot not ready") during
+            # reconnect windows; a dropped message must not break generation.
+            logger.warning("Dropping message for %s: %s", channel_login, exc)
+            return False
+        return True
 
 
 class BotManager:
@@ -72,12 +100,22 @@ class BotManager:
         self._by_login: dict[str, str] = {}
         self._enabled: dict[str, bool] = {}
         self._sender = _ChatSender(self)
+        # Serialises start/stop so overlapping restarts can't orphan a live Chat.
+        self._lifecycle_lock = asyncio.Lock()
+        # The loop that owns the DB sessions; set in start().
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     # --- lifecycle ---
 
     async def start(self) -> None:
+        async with self._lifecycle_lock:
+            await self._start_locked()
+
+    async def _start_locked(self) -> None:
+        self._loop = asyncio.get_running_loop()
+
         if self.chat is not None:
-            await self.stop()
+            await self._stop_locked()
 
         async with self.session_factory() as session:
             channels = await repo.list_channels(session)
@@ -110,7 +148,7 @@ class BotManager:
                 await twitch.set_user_authentication(
                     account.access_token, _CHAT_SCOPES, account.refresh_token
                 )
-            except Exception as exc:
+            except _AUTH_EXCEPTIONS as exc:
                 async with self.session_factory() as session:
                     await repo.set_bot_account_valid(session, False)
                 self.state = "invalid_token"
@@ -122,15 +160,24 @@ class BotManager:
                 return
 
             chat = await self.chat_factory(twitch, asyncio.get_running_loop())
+            chat.log_no_registered_command_handler = False
             chat.register_event(ChatEvent.READY, self._on_ready)
             chat.register_event(ChatEvent.MESSAGE, self._on_message)
             chat.register_event(ChatEvent.JOINED, self._on_joined)
             chat.register_event(ChatEvent.LEFT, self._on_left)
 
-            await asyncio.to_thread(chat.start)
-
+            # Published before start() because READY can fire from the socket
+            # thread while start() is still blocked.
             self.twitch = twitch
             self.chat = chat
+
+            try:
+                await asyncio.wait_for(asyncio.to_thread(chat.start), timeout=CHAT_START_TIMEOUT)
+            except TimeoutError as exc:
+                raise TimeoutError(
+                    f"Chat.start() timed out after {CHAT_START_TIMEOUT}s"
+                ) from exc
+
             self.bot_login = account.login
             for rt in self.runtimes.values():
                 rt.bot_login = account.login
@@ -154,10 +201,28 @@ class BotManager:
             self.error = str(exc)
 
     async def _persist_tokens(self, access_token: str, refresh_token: str) -> None:
+        """twitchAPI may call this from the Chat socket thread's own loop (it
+        refreshes an expired token on connect/reconnect). DB sessions belong to
+        the loop that created the engine, so hop back to it when that happens."""
+        loop = self._loop
+        if loop is not None and asyncio.get_running_loop() is not loop:
+            await asyncio.wrap_future(
+                asyncio.run_coroutine_threadsafe(
+                    self._persist_tokens_on_main(access_token, refresh_token), loop
+                )
+            )
+            return
+        await self._persist_tokens_on_main(access_token, refresh_token)
+
+    async def _persist_tokens_on_main(self, access_token: str, refresh_token: str) -> None:
         async with self.session_factory() as session:
             await repo.update_bot_tokens(session, access_token, refresh_token)
 
     async def stop(self) -> None:
+        async with self._lifecycle_lock:
+            await self._stop_locked()
+
+    async def _stop_locked(self) -> None:
         if self.chat is not None:
             try:
                 await asyncio.to_thread(self.chat.stop)
@@ -172,6 +237,7 @@ class BotManager:
             self.twitch = None
         for rt in self.runtimes.values():
             rt.joined = False
+            rt.bot_login = ""
         self.bot_login = None
         self.state = "stopped"
 
@@ -188,6 +254,11 @@ class BotManager:
 
     async def _on_message(self, msg) -> None:
         try:
+            # ``room`` is unset until ROOMSTATE arrives; such a message can't
+            # be attributed to a channel, so drop it.
+            if msg.room is None:
+                logger.debug("Dropping chat message with no room yet")
+                return
             channel_id = self._by_login.get(msg.room.name.lower())
             if channel_id is None:
                 return
@@ -195,6 +266,7 @@ class BotManager:
             inbound = InboundMessage(
                 user_id=str(msg.user.id),
                 username=msg.user.display_name or msg.user.name,
+                login=msg.user.name,
                 is_mod=bool(msg.user.mod),
                 is_broadcaster=str(msg.user.id) == rt.channel_id,
                 sent_at=datetime.fromtimestamp(msg.sent_timestamp / 1000, UTC),

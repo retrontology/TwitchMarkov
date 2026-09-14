@@ -34,7 +34,7 @@ async def handle_command(rt: "ChannelRuntime", msg: InboundMessage) -> None:
         return
 
     is_privileged = (
-        msg.is_mod or msg.is_broadcaster or msg.username.lower() in rt.admins
+        msg.is_mod or msg.is_broadcaster or msg.login.lower() in rt.admins
     )
     if not is_privileged:
         return

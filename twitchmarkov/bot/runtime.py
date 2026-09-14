@@ -80,7 +80,7 @@ class ChannelRuntime:
 
     async def _handle_message(self, msg: InboundMessage) -> None:
         ignored = {name.lower() for name in self.settings["ignored_users"]}
-        if msg.username.lower() in ignored:
+        if msg.login.lower() in ignored:
             return
 
         if msg.text.startswith("!"):
@@ -143,10 +143,13 @@ class ChannelRuntime:
             self.recent_phrases = self.recent_phrases[-RECENT_PHRASES_LIMIT:]
 
         text = f"@{target} {content}" if target else content
-        sent = send if send is not None else self.settings["send_messages"]
+        should_send = send if send is not None else self.settings["send_messages"]
 
-        if sent:
-            await self.sender.send(self.login, text)
+        # Record what actually happened: the sender drops messages when the
+        # bot isn't connected, and the log should not claim otherwise.
+        # Record what actually happened: the sender drops messages when the
+        # bot isn't connected, and the log should not claim otherwise.
+        sent = bool(await self.sender.send(self.login, text)) if should_send else False
 
         async with self.session_factory() as session:
             await repo.add_generated(

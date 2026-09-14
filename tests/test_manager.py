@@ -1,10 +1,13 @@
+import asyncio
+import threading
 from types import SimpleNamespace
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from twitchAPI.type import AuthScope, ChatEvent
+from twitchAPI.type import AuthScope, ChatEvent, InvalidTokenException
 
 from conftest import make_channel
+from twitchmarkov.bot import manager as manager_module
 from twitchmarkov.bot.manager import BotManager
 from twitchmarkov.db import repo
 from twitchmarkov.settings import Settings
@@ -13,10 +16,18 @@ from twitchmarkov.settings import Settings
 class FakeTwitch:
     """Stand-in for twitchAPI.twitch.Twitch: records auth calls, never touches the network."""
 
-    def __init__(self, client_id: str, client_secret: str, *, fail_auth: bool = False) -> None:
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        *,
+        fail_auth: bool = False,
+        auth_exc: Exception | None = None,
+    ) -> None:
         self.client_id = client_id
         self.client_secret = client_secret
         self.fail_auth = fail_auth
+        self.auth_exc = auth_exc
         self.fail_close = False
         self.user_auth_refresh_callback = None
         self.auth_calls: list[tuple] = []
@@ -24,8 +35,10 @@ class FakeTwitch:
 
     async def set_user_authentication(self, token, scopes, refresh_token):
         self.auth_calls.append((token, scopes, refresh_token))
+        if self.auth_exc is not None:
+            raise self.auth_exc
         if self.fail_auth:
-            raise Exception("bad token")
+            raise InvalidTokenException("bad token")
 
     async def close(self) -> None:
         if self.fail_close:
@@ -41,6 +54,7 @@ class FakeChat:
         self.loop = loop
         self.fail_start = fail_start
         self.handlers: dict[ChatEvent, callable] = {}
+        self.log_no_registered_command_handler = True
         self.joined: list[str] = []
         self.left: list[str] = []
         self.sent: list[tuple[str, str]] = []
@@ -84,7 +98,7 @@ def make_message(
     return SimpleNamespace(
         text=text,
         sent_timestamp=sent_timestamp,
-        room=SimpleNamespace(name=room),
+        room=SimpleNamespace(name=room) if room is not None else None,
         user=SimpleNamespace(id=user_id, name=name, display_name=display_name, mod=mod),
     )
 
@@ -94,15 +108,17 @@ def make_manager(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     fail_auth: bool = False,
+    auth_exc: Exception | None = None,
     fail_start: bool = False,
     fail_close: bool = False,
+    chat_cls: type = FakeChat,
 ) -> tuple[BotManager, list[FakeTwitch], list[FakeChat]]:
     twitches: list[FakeTwitch] = []
     chats: list[FakeChat] = []
 
     def twitch_factory(client_id, client_secret):
         async def make():
-            t = FakeTwitch(client_id, client_secret, fail_auth=fail_auth)
+            t = FakeTwitch(client_id, client_secret, fail_auth=fail_auth, auth_exc=auth_exc)
             t.fail_close = fail_close
             twitches.append(t)
             return t
@@ -111,7 +127,7 @@ def make_manager(
 
     def chat_factory(twitch, loop):
         async def make():
-            c = FakeChat(twitch, loop, fail_start=fail_start)
+            c = chat_cls(twitch, loop, fail_start=fail_start)
             chats.append(c)
             return c
 
@@ -453,3 +469,248 @@ async def test_stop_still_completes_when_twitch_close_raises(
 
     assert manager.state == "stopped"
     assert manager.twitch is None
+
+
+class ReadyOnStartChat(FakeChat):
+    """FakeChat that fires the READY handler from inside ``start()`` (on the
+    socket thread), the way twitchAPI can before ``start()`` returns."""
+
+    def start(self) -> None:
+        super().start()
+        handler = self.handlers[ChatEvent.READY]
+        future = asyncio.run_coroutine_threadsafe(handler(SimpleNamespace(chat=self)), self.loop)
+        future.result(5)
+
+
+class BlockingStartChat(FakeChat):
+    """FakeChat whose ``start()`` never completes until ``release`` is set."""
+
+    release = threading.Event()
+
+    def start(self) -> None:
+        BlockingStartChat.release.wait(10)
+        self.started = True
+
+
+async def test_transient_auth_error_is_error_state_and_keeps_account_valid(
+    settings, session_factory, defaults_row
+):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(
+        settings, session_factory, auth_exc=RuntimeError("network down")
+    )
+    await manager.start()
+
+    assert manager.state == "error"
+    assert "network down" in manager.error
+    assert manager.twitch is None
+
+    async with session_factory() as session:
+        account = await repo.get_bot_account(session)
+    assert account.valid is True
+
+
+async def test_unauthorized_exception_invalidates_account(settings, session_factory, defaults_row):
+    from twitchAPI.type import UnauthorizedException
+
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(
+        settings, session_factory, auth_exc=UnauthorizedException("no scope")
+    )
+    await manager.start()
+
+    assert manager.state == "invalid_token"
+
+    async with session_factory() as session:
+        account = await repo.get_bot_account(session)
+    assert account.valid is False
+
+
+async def test_persist_tokens_from_foreign_loop_thread_updates_db(
+    settings, session_factory, defaults_row, monkeypatch
+):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory)
+    await manager.start()
+
+    # Record which loop the DB work actually ran on: twitchAPI can invoke the
+    # refresh callback on the chat socket thread, and the session must never
+    # be opened there.
+    loops: list[asyncio.AbstractEventLoop] = []
+    real_update = manager_module.repo.update_bot_tokens
+
+    async def recording_update(session, access_token, refresh_token):
+        loops.append(asyncio.get_running_loop())
+        return await real_update(session, access_token, refresh_token)
+
+    monkeypatch.setattr(manager_module.repo, "update_bot_tokens", recording_update)
+
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        async def main() -> None:
+            await manager._persist_tokens("threadtok", "threadref")
+
+        try:
+            asyncio.run(main())
+        except BaseException as exc:  # noqa: BLE001 - reported back to the test
+            errors.append(exc)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    # Stay on the event loop so it can service the cross-thread hop.
+    while thread.is_alive():
+        await asyncio.sleep(0.01)
+    thread.join()
+
+    assert errors == []
+    assert loops == [asyncio.get_running_loop()]
+
+    async with session_factory() as session:
+        account = await repo.get_bot_account(session)
+    assert account.access_token == "threadtok"
+    assert account.refresh_token == "threadref"
+
+
+async def test_ready_fired_during_chat_start_joins_enabled_channels(
+    settings, session_factory, defaults_row
+):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory, chat_cls=ReadyOnStartChat)
+    await manager.start()
+
+    assert manager.state == "connected"
+    assert chats[0].joined == ["chan1"]
+
+
+async def test_chat_start_timeout_sets_error_state(
+    settings, session_factory, defaults_row, monkeypatch
+):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    monkeypatch.setattr(manager_module, "CHAT_START_TIMEOUT", 0.05)
+    BlockingStartChat.release.clear()
+    manager, twitches, chats = make_manager(settings, session_factory, chat_cls=BlockingStartChat)
+    try:
+        await manager.start()
+
+        assert manager.state == "error"
+        assert "timed out" in manager.error
+        assert manager.chat is None
+        assert manager.twitch is None
+        assert twitches[0].closed is True
+    finally:
+        BlockingStartChat.release.set()
+
+
+async def test_concurrent_restarts_leave_exactly_one_live_chat(
+    settings, session_factory, defaults_row
+):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory)
+    await manager.start()
+
+    await asyncio.gather(manager.restart(), manager.restart())
+
+    live = [chat for chat in chats if chat.started]
+    assert len(live) == 1
+    assert manager.chat is live[0]
+    assert manager.state == "connected"
+    assert all(chat.stopped for chat in chats if chat is not live[0])
+
+
+async def test_message_without_room_is_dropped(settings, session_factory, defaults_row, caplog):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory)
+    await manager.start()
+
+    with caplog.at_level("DEBUG", logger="twitchmarkov.bot.manager"):
+        await chats[0].handlers[ChatEvent.MESSAGE](make_message(room=None))
+
+    async with session_factory() as session:
+        count = await repo.count_messages(session, "1")
+    assert count == 0
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
+
+
+async def test_chat_no_registered_command_handler_logging_disabled(
+    settings, session_factory, defaults_row
+):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory)
+    await manager.start()
+
+    assert chats[0].log_no_registered_command_handler is False
+
+
+async def test_stop_clears_runtime_bot_login(settings, session_factory, defaults_row):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory)
+    await manager.start()
+    assert manager.runtime("1").bot_login == "botuser"
+
+    await manager.stop()
+
+    assert manager.runtime("1").bot_login == ""
+
+
+async def test_sender_returns_true_when_message_is_sent(settings, session_factory, defaults_row):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory)
+    await manager.start()
+
+    assert await manager._sender.send("chan1", "hi") is True
+    assert chats[0].sent == [("chan1", "hi")]
+
+
+async def test_sender_returns_false_when_not_connected(settings, session_factory, defaults_row):
+    manager, twitches, chats = make_manager(settings, session_factory)
+
+    assert await manager._sender.send("chan1", "hi") is False
+
+
+async def test_sender_returns_false_when_send_message_raises(
+    settings, session_factory, defaults_row
+):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory)
+    await manager.start()
+
+    async def boom(login, text):
+        raise ValueError("bot not ready")
+
+    chats[0].send_message = boom
+
+    assert await manager._sender.send("chan1", "hi") is False

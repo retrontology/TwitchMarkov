@@ -29,6 +29,7 @@ def make_msg(
     username: str = "viewer",
     text: str = "hello there friend",
     *,
+    login: str | None = None,
     is_mod: bool = False,
     is_broadcaster: bool = False,
     sent_at: datetime | None = None,
@@ -36,6 +37,7 @@ def make_msg(
     return InboundMessage(
         user_id="42",
         username=username,
+        login=login if login is not None else username.lower(),
         is_mod=is_mod,
         is_broadcaster=is_broadcaster,
         sent_at=sent_at or datetime(2024, 1, 1, tzinfo=UTC),
@@ -347,3 +349,62 @@ async def test_handle_message_survives_db_error(session_factory, session, channe
     await rt.handle_message(make_msg(username="viewer", text="a perfectly normal message"))
 
     assert sender.sent == []
+
+
+async def test_ignored_users_matches_login_not_display_name(session_factory, session, channel):
+    """``ignored_users`` holds Twitch logins; a display name that happens to
+    differ from the login must not change whether the user is ignored."""
+    await repo.update_settings(session, channel, {"ignored_users": ["nightbot"]})
+    rt, sender, clock = await make_runtime(session_factory, bot_login="")
+
+    # Display name unrelated to the login: still ignored.
+    await rt.handle_message(
+        make_msg(username="Totally Not A Bot", login="nightbot", text="I am a bot")
+    )
+    # Display name matches the ignore entry but the login does not: learned.
+    await rt.handle_message(
+        make_msg(username="NightBot", login="realviewer", text="a perfectly human message")
+    )
+
+    corpus = await repo.corpus(session, "1")
+    assert corpus == ["a perfectly human message"]
+
+
+async def test_admin_command_authorised_by_login_not_display_name(
+    session_factory, session, channel
+):
+    rt, sender, clock = await make_runtime(
+        session_factory, bot_login="", admins=frozenset({"adminlogin"})
+    )
+
+    await rt.handle_message(
+        make_msg(username="Some Display Name", login="adminlogin", text="!isalive")
+    )
+    assert sender.sent == [("chan", "Yeah, I'm alive and learning. MrDestructoid")]
+
+    sender.sent.clear()
+    await rt.handle_message(
+        make_msg(username="AdminLogin", login="impostor", text="!isalive")
+    )
+    assert sender.sent == []
+
+
+async def test_dropped_send_records_generated_row_as_not_sent(
+    session_factory, session, channel, monkeypatch
+):
+    rt, sender, clock = await make_runtime(session_factory, bot_login="")
+    sender.result = False
+
+    async def fake_generate_sentence(corpus, **kwargs):
+        return "a generated sentence"
+
+    monkeypatch.setattr(runtime_module, "generate_sentence", fake_generate_sentence)
+
+    assert await rt.generate(send=True, trigger="api") == "a generated sentence"
+
+    result = await session.execute(
+        select(GeneratedMessage).where(GeneratedMessage.channel_id == "1")
+    )
+    rows = result.scalars().all()
+    assert len(rows) == 1
+    assert rows[0].sent is False

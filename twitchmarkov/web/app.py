@@ -5,6 +5,7 @@ This module is the one place in ``web/`` (besides the auth/channels routers
 added in later tasks) allowed to import twitchAPI directly.
 """
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -49,8 +50,26 @@ def create_app(
         owned_engine = None
         app_twitch = None
         app_bot = None
+        bot_task: asyncio.Task | None = None
+
+        async def _run_bot(bot: BotManager) -> None:
+            # Connecting can block for a long time (or fail) if Twitch IRC is
+            # down; the manager already records that as its own error state.
+            try:
+                await bot.start()
+            except Exception:
+                logger.exception("Bot failed to start")
 
         async def _release() -> None:
+            if bot_task is not None:
+                if not bot_task.done():
+                    bot_task.cancel()
+                try:
+                    await bot_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    logger.exception("Bot start task failed")
             if app_bot is not None:
                 try:
                     await app_bot.stop()
@@ -93,7 +112,10 @@ def create_app(
             app.state.app_twitch = app_twitch
             app.state.session_serializer = sessions.make_serializer(secret)
 
-            await app_bot.start()
+            # Started in the background so a slow or failing Twitch connect
+            # can't stop uvicorn from binding the port.
+            bot_task = asyncio.create_task(_run_bot(app_bot))
+            app.state.bot_task = bot_task
         except Exception:
             logger.exception("Error during app startup; releasing acquired resources")
             await _release()
