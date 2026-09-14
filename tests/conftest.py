@@ -7,6 +7,7 @@ from twitchmarkov.db.engine import make_engine, make_session_factory
 from twitchmarkov.db.models import Base, Channel, ChannelDefaults
 from twitchmarkov.settings import Settings
 from twitchmarkov.web.app import create_app
+from twitchmarkov.web.sessions import COOKIE, encode_session
 
 
 @pytest.fixture
@@ -110,5 +111,21 @@ def app(settings: Settings, session_factory: async_sessionmaker[AsyncSession]):
 async def client(app):
     async with app.router.lifespan_context(app):
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test", follow_redirects=False
+        ) as ac:
             yield ac
+
+
+def login_as(client: httpx.AsyncClient, app, user_id: str, login: str, display_name: str) -> None:
+    """Sets the session cookie directly, bypassing the OAuth flow, for tests
+    that need an authenticated client without exercising /auth/*.
+
+    Goes through ``Cookies.extract_cookies`` (rather than ``Cookies.set``) so
+    the stored cookie's domain is resolved the same way a real ``Set-Cookie``
+    response would be, keeping it deletable by a later real logout response.
+    """
+    token = encode_session(app.state.session_serializer, user_id, login, display_name)
+    request = client.build_request("GET", "/")
+    response = httpx.Response(200, request=request, headers={"set-cookie": f"{COOKIE}={token}; Path=/"})
+    client.cookies.extract_cookies(response)

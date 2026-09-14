@@ -10,7 +10,6 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import itsdangerous
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +19,9 @@ from twitchmarkov.bot.manager import BotManager
 from twitchmarkov.db import engine as db_engine
 from twitchmarkov.db import repo
 from twitchmarkov.settings import Settings
+from twitchmarkov.web import sessions
+from twitchmarkov.web.routers import auth as auth_router
+from twitchmarkov.web.routers import me as me_router
 
 logger = logging.getLogger("twitchmarkov.web.app")
 
@@ -87,7 +89,7 @@ def create_app(
             app.state.session_factory = sf
             app.state.bot = app_bot
             app.state.app_twitch = app_twitch
-            app.state.session_serializer = itsdangerous.URLSafeTimedSerializer(secret)
+            app.state.session_serializer = sessions.make_serializer(secret)
 
             await app_bot.start()
         except Exception:
@@ -115,5 +117,8 @@ def create_app(
         return FileResponse(STATIC_DIR / "commands.html")
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    app.include_router(auth_router.router)
+    app.include_router(me_router.router)
 
     return app
