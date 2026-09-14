@@ -20,6 +20,7 @@ from twitchmarkov.db import engine as db_engine
 from twitchmarkov.db import repo
 from twitchmarkov.settings import Settings
 from twitchmarkov.web import sessions
+from twitchmarkov.web.routers import admin as admin_router
 from twitchmarkov.web.routers import auth as auth_router
 from twitchmarkov.web.routers import channels as channels_router
 from twitchmarkov.web.routers import me as me_router
@@ -122,5 +123,6 @@ def create_app(
     app.include_router(auth_router.router)
     app.include_router(me_router.router)
     app.include_router(channels_router.router)
+    app.include_router(admin_router.router)
 
     return app
