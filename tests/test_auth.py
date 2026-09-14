@@ -186,6 +186,41 @@ async def test_bot_callback_stores_account_and_restarts_bot(
     assert ("restart",) in app.state.bot.calls
 
 
+async def test_callback_reports_400_when_exchange_code_fails(client, monkeypatch):
+    monkeypatch.setattr("twitchmarkov.web.routers.auth.build_auth_url", fake_build_auth_url)
+
+    async def failing_exchange_code(app_twitch, scopes, redirect_url, code):
+        raise RuntimeError("twitch says no")
+
+    login_response = await client.get("/auth/login?next=/")
+    state = state_from_location(login_response.headers["location"])
+    monkeypatch.setattr("twitchmarkov.web.routers.auth.exchange_code", failing_exchange_code)
+
+    response = await client.get(f"/auth/callback?code=abc&state={state}")
+
+    assert response.status_code == 400
+    assert client.cookies.get(COOKIE) is None
+    assert (await client.get("/api/me")).status_code == 401
+
+
+async def test_callback_reports_400_when_identify_token_fails(client, monkeypatch):
+    monkeypatch.setattr("twitchmarkov.web.routers.auth.build_auth_url", fake_build_auth_url)
+    monkeypatch.setattr("twitchmarkov.web.routers.auth.exchange_code", fake_exchange_code)
+
+    async def failing_identify_token(app_twitch, token):
+        raise RuntimeError("twitch says no")
+
+    login_response = await client.get("/auth/login?next=/")
+    state = state_from_location(login_response.headers["location"])
+    monkeypatch.setattr("twitchmarkov.web.routers.auth.identify_token", failing_identify_token)
+
+    response = await client.get(f"/auth/callback?code=abc&state={state}")
+
+    assert response.status_code == 400
+    assert client.cookies.get(COOKIE) is None
+    assert (await client.get("/api/me")).status_code == 401
+
+
 async def test_logout_clears_session_cookie(client, app):
     login_as(client, app, "1", "admin1", "Admin One")
     assert (await client.get("/api/me")).status_code == 200

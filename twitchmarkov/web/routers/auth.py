@@ -13,7 +13,7 @@ them as default arguments, so the monkeypatch takes effect.
 import logging
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from twitchAPI.helper import first
@@ -56,7 +56,10 @@ async def identify_token(app_twitch, token: str) -> tuple[str, str, str]:
     user_id = data["user_id"]
     login = data["login"]
     user = await first(app_twitch.get_users(user_ids=[user_id]))
-    return user_id, login, user.display_name
+    # A valid token always has a login from validate_token above; fall back
+    # to it rather than crashing if the user lookup unexpectedly misses.
+    display_name = user.display_name if user is not None else login
+    return user_id, login, display_name
 
 
 async def revoke(app_twitch_client_id: str, token: str) -> None:
@@ -81,6 +84,14 @@ def _scopes_for_purpose(purpose: str) -> list[AuthScope] | None:
     if purpose == "bot":
         return list(_BOT_SCOPES)
     return None
+
+
+def _error_response(detail: str) -> JSONResponse:
+    """400 response for the callback route. Also clears STATE_COOKIE since
+    the OAuth attempt it belonged to is now dead one way or another."""
+    response = JSONResponse({"detail": detail}, status_code=400)
+    response.delete_cookie(STATE_COOKIE)
+    return response
 
 
 def _set_state_cookie(response, settings: Settings, nonce: str) -> None:
@@ -128,25 +139,29 @@ async def callback(
     session: AsyncSession = Depends(get_session),
 ):
     if error is not None:
-        raise HTTPException(status_code=400, detail=f"Twitch authorization failed: {error}")
+        return _error_response(f"Twitch authorization failed: {error}")
 
     ser = request.app.state.session_serializer
     state_payload = decode_state(ser, state) if state else None
     if state_payload is None:
-        raise HTTPException(status_code=400, detail="Invalid state")
+        return _error_response("Invalid state")
 
     cookie_nonce = request.cookies.get(STATE_COOKIE)
     if not cookie_nonce or cookie_nonce != state_payload["nonce"]:
-        raise HTTPException(status_code=400, detail="State mismatch")
+        return _error_response("State mismatch")
 
     purpose = state_payload["purpose"]
     scopes = _scopes_for_purpose(purpose)
     if scopes is None:
-        raise HTTPException(status_code=400, detail=f"Unknown auth purpose: {purpose}")
+        return _error_response(f"Unknown auth purpose: {purpose}")
 
     app_twitch = request.app.state.app_twitch
-    token, refresh = await exchange_code(app_twitch, scopes, settings.redirect_url, code)
-    user_id, login_name, display_name = await identify_token(app_twitch, token)
+    try:
+        token, refresh = await exchange_code(app_twitch, scopes, settings.redirect_url, code)
+        user_id, login_name, display_name = await identify_token(app_twitch, token)
+    except Exception as exc:
+        logger.warning("Twitch code exchange failed: %s", exc)
+        return _error_response("Twitch code exchange failed")
 
     if purpose == "login":
         session_token = encode_session(ser, user_id, login_name, display_name)
