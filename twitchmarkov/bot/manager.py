@@ -76,6 +76,9 @@ class BotManager:
     # --- lifecycle ---
 
     async def start(self) -> None:
+        if self.chat is not None:
+            await self.stop()
+
         async with self.session_factory() as session:
             channels = await repo.list_channels(session)
         for channel in channels:
@@ -94,39 +97,58 @@ class BotManager:
     async def _connect(self, account) -> None:
         self.state = "starting"
         self.error = None
-
-        twitch = await self.twitch_factory(
-            self.settings.twitch_client_id, self.settings.twitch_client_secret
-        )
-        twitch.user_auth_refresh_callback = self._persist_tokens
+        twitch = None
+        chat = None
 
         try:
-            await twitch.set_user_authentication(
-                account.access_token, _CHAT_SCOPES, account.refresh_token
+            twitch = await self.twitch_factory(
+                self.settings.twitch_client_id, self.settings.twitch_client_secret
             )
+            twitch.user_auth_refresh_callback = self._persist_tokens
+
+            try:
+                await twitch.set_user_authentication(
+                    account.access_token, _CHAT_SCOPES, account.refresh_token
+                )
+            except Exception as exc:
+                async with self.session_factory() as session:
+                    await repo.set_bot_account_valid(session, False)
+                self.state = "invalid_token"
+                self.error = str(exc)
+                await twitch.close()
+                return
+
+            chat = await self.chat_factory(twitch, asyncio.get_running_loop())
+            chat.register_event(ChatEvent.READY, self._on_ready)
+            chat.register_event(ChatEvent.MESSAGE, self._on_message)
+            chat.register_event(ChatEvent.JOINED, self._on_joined)
+            chat.register_event(ChatEvent.LEFT, self._on_left)
+
+            await asyncio.to_thread(chat.start)
+
+            self.twitch = twitch
+            self.chat = chat
+            self.bot_login = account.login
+            for rt in self.runtimes.values():
+                rt.bot_login = account.login
+
+            self.state = "connected"
         except Exception as exc:
-            async with self.session_factory() as session:
-                await repo.set_bot_account_valid(session, False)
-            self.state = "invalid_token"
+            logger.exception("Failed to connect bot account")
+            if chat is not None:
+                try:
+                    await asyncio.to_thread(chat.stop)
+                except Exception:
+                    pass
+            if twitch is not None:
+                try:
+                    await twitch.close()
+                except Exception:
+                    pass
+            self.chat = None
+            self.twitch = None
+            self.state = "error"
             self.error = str(exc)
-            await twitch.close()
-            return
-
-        self.twitch = twitch
-        chat = await self.chat_factory(twitch, asyncio.get_running_loop())
-        chat.register_event(ChatEvent.READY, self._on_ready)
-        chat.register_event(ChatEvent.MESSAGE, self._on_message)
-        chat.register_event(ChatEvent.JOINED, self._on_joined)
-        chat.register_event(ChatEvent.LEFT, self._on_left)
-        self.chat = chat
-
-        await asyncio.to_thread(chat.start)
-
-        self.bot_login = account.login
-        for rt in self.runtimes.values():
-            rt.bot_login = account.login
-
-        self.state = "connected"
 
     async def _persist_tokens(self, access_token: str, refresh_token: str) -> None:
         async with self.session_factory() as session:
@@ -140,8 +162,14 @@ class BotManager:
                 pass
             self.chat = None
         if self.twitch is not None:
-            await self.twitch.close()
+            try:
+                await self.twitch.close()
+            except Exception:
+                logger.exception("Error closing twitch client")
             self.twitch = None
+        for rt in self.runtimes.values():
+            rt.joined = False
+        self.bot_login = None
         self.state = "stopped"
 
     async def restart(self) -> None:

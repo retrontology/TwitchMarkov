@@ -17,6 +17,7 @@ class FakeTwitch:
         self.client_id = client_id
         self.client_secret = client_secret
         self.fail_auth = fail_auth
+        self.fail_close = False
         self.user_auth_refresh_callback = None
         self.auth_calls: list[tuple] = []
         self.closed = False
@@ -27,15 +28,18 @@ class FakeTwitch:
             raise Exception("bad token")
 
     async def close(self) -> None:
+        if self.fail_close:
+            raise Exception("close failed")
         self.closed = True
 
 
 class FakeChat:
     """Stand-in for twitchAPI.chat.Chat: records room joins/leaves/sends, exposes handlers."""
 
-    def __init__(self, twitch, loop) -> None:
+    def __init__(self, twitch, loop, *, fail_start: bool = False) -> None:
         self.twitch = twitch
         self.loop = loop
+        self.fail_start = fail_start
         self.handlers: dict[ChatEvent, callable] = {}
         self.joined: list[str] = []
         self.left: list[str] = []
@@ -47,6 +51,8 @@ class FakeChat:
         self.handlers[event] = handler
 
     def start(self) -> None:
+        if self.fail_start:
+            raise RuntimeError("socket down")
         self.started = True
 
     def stop(self) -> None:
@@ -88,6 +94,7 @@ def make_manager(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     fail_auth: bool = False,
+    fail_start: bool = False,
 ) -> tuple[BotManager, list[FakeTwitch], list[FakeChat]]:
     twitches: list[FakeTwitch] = []
     chats: list[FakeChat] = []
@@ -102,7 +109,7 @@ def make_manager(
 
     def chat_factory(twitch, loop):
         async def make():
-            c = FakeChat(twitch, loop)
+            c = FakeChat(twitch, loop, fail_start=fail_start)
             chats.append(c)
             return c
 
@@ -339,7 +346,7 @@ async def test_set_channel_enabled_joins_and_leaves(settings, session_factory, d
     assert chats[0].left == ["chan1"]
 
 
-async def test_reload_channel_calls_runtime_reload(settings, session_factory, defaults_row):
+async def test_reload_channel_reflects_updated_settings(settings, session_factory, defaults_row):
     async with session_factory() as session:
         await make_channel(session, id="1", login="chan1")
     await seed_account(session_factory)
@@ -347,6 +354,83 @@ async def test_reload_channel_calls_runtime_reload(settings, session_factory, de
     manager, twitches, chats = make_manager(settings, session_factory)
     await manager.start()
 
-    # No exception means it delegated correctly; direct check via settings reload.
+    rt = manager.runtime("1")
+    original = rt.settings["generate_on"]
+
+    async with session_factory() as session:
+        channel = await repo.get_channel(session, "1")
+        await repo.update_settings(session, channel, {"generate_on": original + 5})
+
     await manager.reload_channel("1")
-    assert manager.runtime("1") is not None
+
+    assert rt.settings["generate_on"] == original + 5
+
+
+async def test_chat_start_failure_sets_error_state_and_cleans_up(
+    settings, session_factory, defaults_row
+):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory, fail_start=True)
+    await manager.start()
+
+    assert manager.state == "error"
+    assert "socket down" in manager.error
+    assert manager.chat is None
+    assert manager.twitch is None
+    assert twitches[0].closed is True
+
+
+async def test_start_twice_stops_previous_chat_before_reconnecting(
+    settings, session_factory, defaults_row
+):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory)
+    await manager.start()
+    await manager.start()
+
+    assert len(chats) == 2
+    assert chats[0].started is False
+    assert chats[0].stopped is True
+    assert chats[1].started is True
+    assert manager.chat is chats[1]
+    assert manager.state == "connected"
+
+
+async def test_stop_clears_joined_flags_and_bot_login(settings, session_factory, defaults_row):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory)
+    await manager.start()
+    await chats[0].handlers[ChatEvent.JOINED](SimpleNamespace(room_name="chan1"))
+
+    await manager.stop()
+
+    status = manager.status()
+    assert status["joined"] == []
+    assert status["login"] is None
+    assert status["state"] == "stopped"
+
+
+async def test_stop_still_completes_when_twitch_close_raises(
+    settings, session_factory, defaults_row
+):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(settings, session_factory)
+    await manager.start()
+    twitches[0].fail_close = True
+
+    await manager.stop()
+
+    assert manager.state == "stopped"
+    assert manager.twitch is None
