@@ -10,7 +10,6 @@ function used by a thin ``field_validator`` on each class.
 
 import re
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -53,20 +52,20 @@ class ChannelSettings(BaseModel):
 
 
 class ChannelSettingsPatch(BaseModel):
-    send_messages: Optional[bool] = None
-    unique: Optional[bool] = None
-    generate_on: Optional[int] = Field(default=None, ge=1)
-    clear_logs_after: Optional[bool] = None
-    ignored_users: Optional[list[str]] = None
-    percent_unique: Optional[float] = Field(default=None, ge=0, le=100)
-    allow_mentions: Optional[bool] = None
-    state_size: Optional[int] = Field(default=None, ge=1, le=5)
-    times_to_try: Optional[int] = Field(default=None, ge=1)
-    cull_over: Optional[int] = Field(default=None, ge=1)
-    time_to_cull: Optional[int] = Field(default=None, ge=0)
-    cooldown_speak: Optional[int] = Field(default=None, ge=0)
-    cooldown_commands: Optional[int] = Field(default=None, ge=0)
-    cooldown_reply: Optional[int] = Field(default=None, ge=0)
+    send_messages: bool | None = None
+    unique: bool | None = None
+    generate_on: int | None = Field(default=None, ge=1)
+    clear_logs_after: bool | None = None
+    ignored_users: list[str] | None = None
+    percent_unique: float | None = Field(default=None, ge=0, le=100)
+    allow_mentions: bool | None = None
+    state_size: int | None = Field(default=None, ge=1, le=5)
+    times_to_try: int | None = Field(default=None, ge=1)
+    cull_over: int | None = Field(default=None, ge=1)
+    time_to_cull: int | None = Field(default=None, ge=0)
+    cooldown_speak: int | None = Field(default=None, ge=0)
+    cooldown_commands: int | None = Field(default=None, ge=0)
+    cooldown_reply: int | None = Field(default=None, ge=0)
 
     @field_validator("ignored_users")
     @classmethod
@@ -114,8 +113,8 @@ class ChannelCreate(BaseModel):
 
 
 class ChannelPatch(BaseModel):
-    enabled: Optional[bool] = None
-    settings: Optional[ChannelSettingsPatch] = None
+    enabled: bool | None = None
+    settings: ChannelSettingsPatch | None = None
 
 
 class GenerateIn(BaseModel):

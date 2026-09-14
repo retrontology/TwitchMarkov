@@ -354,6 +354,85 @@ async def test_wipe_without_runtime_is_service_unavailable(client, app, session,
     assert response.status_code == 503
 
 
+# --- generated ---
+
+
+async def test_generated_requires_auth(client, app, session, defaults_row):
+    await make_channel(session, id="1", login="chan")
+
+    response = await client.get("/api/channels/1/generated")
+
+    assert response.status_code == 401
+
+
+async def test_generated_forbidden_for_stranger(client, app, session, defaults_row):
+    await make_channel(session, id="1", login="chan")
+    await repo.add_generated(session, "1", content="one", target=None, sent=True, trigger="api")
+    login_as(client, app, "999", "stranger", "Stranger")
+
+    response = await client.get("/api/channels/1/generated")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Forbidden"
+
+
+async def test_generated_returns_recent_rows_newest_first(client, app, session, defaults_row):
+    await make_channel(session, id="1", login="chan")
+    for content in ("first", "second", "third"):
+        await repo.add_generated(
+            session, "1", content=content, target=None, sent=True, trigger="api"
+        )
+    login_as(client, app, ADMIN_ID, ADMIN_LOGIN, "Admin One")
+
+    response = await client.get("/api/channels/1/generated")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 3
+    # repo.recent_generated orders by id desc, so the most recently added
+    # (highest-id) row comes first.
+    assert [row["content"] for row in body] == ["third", "second", "first"]
+    for row in body:
+        assert set(row.keys()) == {"content", "target", "sent", "trigger", "created_at"}
+        assert row["sent"] is True
+        assert row["trigger"] == "api"
+        assert row["target"] is None
+
+
+async def test_generated_respects_limit_query_param(client, app, session, defaults_row):
+    await make_channel(session, id="1", login="chan")
+    for content in ("first", "second", "third"):
+        await repo.add_generated(
+            session, "1", content=content, target=None, sent=True, trigger="api"
+        )
+    login_as(client, app, ADMIN_ID, ADMIN_LOGIN, "Admin One")
+
+    response = await client.get("/api/channels/1/generated?limit=2")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert [row["content"] for row in body] == ["third", "second"]
+
+
+async def test_generated_limit_zero_is_unprocessable(client, app, session, defaults_row):
+    await make_channel(session, id="1", login="chan")
+    login_as(client, app, ADMIN_ID, ADMIN_LOGIN, "Admin One")
+
+    response = await client.get("/api/channels/1/generated?limit=0")
+
+    assert response.status_code == 422
+
+
+async def test_generated_limit_over_100_is_unprocessable(client, app, session, defaults_row):
+    await make_channel(session, id="1", login="chan")
+    login_as(client, app, ADMIN_ID, ADMIN_LOGIN, "Admin One")
+
+    response = await client.get("/api/channels/1/generated?limit=101")
+
+    assert response.status_code == 422
+
+
 # --- blacklist ---
 
 

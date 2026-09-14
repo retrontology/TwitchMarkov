@@ -33,6 +33,8 @@ from twitchmarkov.web.sessions import User
 
 router = APIRouter(prefix="/api/channels")
 
+_BOT_RUNTIME_NOT_AVAILABLE = "Bot runtime not available"
+
 
 async def lookup_user(app_twitch, login: str) -> tuple[str, str, str] | None:
     """Resolve a Twitch login to (id, login, display_name), or None if unknown."""
@@ -157,7 +159,7 @@ async def channel_stats(
     try:
         stats = await bot.channel_stats(channel_id)
     except KeyError:
-        raise HTTPException(status_code=503, detail="Bot runtime not available")
+        raise HTTPException(status_code=503, detail=_BOT_RUNTIME_NOT_AVAILABLE)
     return StatsOut(
         channel_id=stats.channel_id,
         joined=stats.joined,
@@ -183,7 +185,7 @@ async def generate(
         raise _forbidden()
     rt = bot.runtime(channel_id)
     if rt is None:
-        raise HTTPException(status_code=503, detail="Bot runtime not available")
+        raise HTTPException(status_code=503, detail=_BOT_RUNTIME_NOT_AVAILABLE)
     content = await rt.generate(send=body.send, trigger="api")
     sent = body.send and content is not None
     return GenerateOut(content=content, sent=sent)
@@ -201,7 +203,7 @@ async def wipe(
         raise _forbidden()
     rt = bot.runtime(channel_id)
     if rt is None:
-        raise HTTPException(status_code=503, detail="Bot runtime not available")
+        raise HTTPException(status_code=503, detail=_BOT_RUNTIME_NOT_AVAILABLE)
     await rt.wipe()
 
 
