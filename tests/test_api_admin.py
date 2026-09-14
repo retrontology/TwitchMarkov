@@ -159,6 +159,14 @@ async def test_get_blacklist_admin_initially_empty(client, app, defaults_row):
     assert response.json() == {"patterns": []}
 
 
+async def test_get_blacklist_non_admin_forbidden(client, app, defaults_row):
+    login_as(client, app, NON_ADMIN_ID, NON_ADMIN_LOGIN, "Someone")
+
+    response = await client.get("/api/blacklist")
+
+    assert response.status_code == 403
+
+
 async def test_put_blacklist_non_admin_forbidden(client, app, defaults_row):
     login_as(client, app, NON_ADMIN_ID, NON_ADMIN_LOGIN, "Someone")
 
@@ -182,3 +190,26 @@ async def test_put_blacklist_admin_normalizes_and_reloads_channels(
     assert response.json() == {"patterns": ["bad", "worse"]}
     assert ("reload_channel", chan1.id) in app.state.bot.calls
     assert ("reload_channel", chan2.id) in app.state.bot.calls
+
+
+async def test_put_blacklist_reload_failure_is_best_effort(
+    client, app, session, defaults_row, monkeypatch
+):
+    chan1 = await make_channel(session, id="1", login="chan1")
+    chan2 = await make_channel(session, id="2", login="chan2")
+    attempted: list[str] = []
+
+    async def flaky_reload_channel(channel_id: str) -> None:
+        attempted.append(channel_id)
+        if channel_id == chan1.id:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(app.state.bot, "reload_channel", flaky_reload_channel)
+    login_as(client, app, ADMIN_ID, ADMIN_LOGIN, "Admin")
+
+    response = await client.put("/api/blacklist", json={"patterns": ["bad"]})
+
+    assert response.status_code == 200
+    assert response.json() == {"patterns": ["bad"]}
+    assert attempted == [chan1.id, chan2.id]
+    assert await repo.get_blacklist(session, None) == ["bad"]

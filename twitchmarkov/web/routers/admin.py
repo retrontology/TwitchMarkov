@@ -6,6 +6,8 @@ repo layer, consistent with the module-level constraint that only
 ``web/app.py`` and the auth/channels routers touch twitchAPI directly.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +17,8 @@ from twitchmarkov.db.models import SETTINGS_FIELDS
 from twitchmarkov.web.deps import current_user, get_bot, get_session, require_admin
 from twitchmarkov.web.schemas import BlacklistIn, BlacklistOut, BotOut, ChannelSettings
 from twitchmarkov.web.sessions import User
+
+logger = logging.getLogger("twitchmarkov.web.routers.admin")
 
 router = APIRouter(prefix="/api")
 
@@ -85,6 +89,9 @@ async def put_global_blacklist(
 ) -> BlacklistOut:
     await repo.set_blacklist(session, None, body.patterns)
     for channel in await repo.list_channels(session):
-        await bot.reload_channel(channel.id)
+        try:
+            await bot.reload_channel(channel.id)
+        except Exception:
+            logger.exception("Failed to reload channel %s after blacklist update", channel.id)
     patterns = await repo.get_blacklist(session, None)
     return BlacklistOut(patterns=patterns)
