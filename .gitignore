@@ -1,10 +1,9 @@
 *.pyc
 *.bak
-logs/*
-messages/*
-oauth/*
-.vscode/settings.json
+.env
 data/
 .venv/
 .superpowers/
 *.egg-info/
+__pycache__/
+.pytest_cache/

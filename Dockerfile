@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# --- build stage: compile dependencies into a self-contained venv ---
-FROM python:3.11-slim AS builder
+# --- build stage: install the package into a self-contained venv ---
+FROM python:3.12-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -9,31 +9,31 @@ ENV PIP_NO_CACHE_DIR=1 \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+WORKDIR /build
+COPY pyproject.toml README.md ./
+COPY twitchmarkov ./twitchmarkov
+RUN pip install .
 
 # --- runtime stage ---
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PATH="/opt/venv/bin:$PATH" \
-    MARKOV_CONFIG=/data/config.yaml \
-    MARKOV_DATA_DIR=/data \
-    HOME=/data
+    PATH=/opt/venv/bin:$PATH \
+    DATABASE_URL=sqlite+aiosqlite:////data/twitchmarkov.db \
+    DATA_DIR=/data
 
 COPY --from=builder /opt/venv /opt/venv
 
-RUN useradd --create-home --home-dir /home/bot --uid 1000 bot
+RUN useradd --uid 1000 bot \
+    && mkdir -p /data && chown bot:bot /data
 
 WORKDIR /app
-COPY --chown=root:root paths.py markovHandler.py twitchMarkov.py ./
-# Shipped as the template the entrypoint seeds /data/config.yaml from.
-COPY --chown=root:root config.yaml /app/config.yaml.template
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY --chown=root:root twitchmarkov ./twitchmarkov
+COPY --chown=root:root alembic.ini ./alembic.ini
 
 USER bot
 
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["python", "twitchMarkov.py"]
+EXPOSE 8000
+
+CMD ["python", "-m", "twitchmarkov"]

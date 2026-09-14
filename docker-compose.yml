@@ -4,15 +4,52 @@ services:
     image: twitchmarkov:latest
     container_name: twitchmarkov
     restart: unless-stopped
-    # A bind mount, not a named volume: bot state (config, message databases,
-    # OAuth token) survives `docker compose down -v` and image rebuilds.
+    ports:
+      - "8000:8000"
+    # `required: false` lets `docker compose build`/`config` work before a
+    # `.env` exists (see README quick start: `cp .env.example .env`).
+    env_file:
+      - path: .env
+        required: false
+    # A bind mount, not a named volume: bot state (the SQLite database, logs
+    # and the generated session secret) survives `docker compose down -v`
+    # and image rebuilds.
     volumes:
       - ./data:/data
-    # Deliberately no `tty:`/`stdin_open:` here. A TTY on the long-running
-    # service would make sys.stdin.isatty() true under `up -d`, defeating the
-    # no-token guard in twitchMarkov.check_oauth() and hanging on input().
-    # The one-time authorization uses `docker compose run --rm -it`, which
-    # allocates its own TTY.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # No `depends_on: mariadb` here on purpose: an unconditional dependency
+    # would pull the `mariadb` service (and its profile) into every `up`,
+    # even for the default sqlite setup. If you use the `mysql` profile,
+    # start mariadb first (or rely on the app's own retry/backoff) — see the
+    # README's MySQL/MariaDB section.
+
+  # Optional MariaDB backend. Only started with `--profile mysql`:
+  #   1. In `.env`, set:
+  #        DATABASE_URL=mysql+aiomysql://twitchmarkov:<password>@mariadb:3306/twitchmarkov
+  #      (matching MARIADB_PASSWORD below)
+  #   2. docker compose --profile mysql up -d
+  mariadb:
+    profiles: ["mysql"]
+    image: mariadb:11
+    container_name: twitchmarkov-mariadb
+    restart: unless-stopped
+    volumes:
+      - ./data/mariadb:/var/lib/mysql
+    environment:
+      MARIADB_DATABASE: twitchmarkov
+      MARIADB_USER: twitchmarkov
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-twitchmarkov}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
     logging:
       driver: json-file
       options:
