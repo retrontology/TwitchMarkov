@@ -1,5 +1,7 @@
-from pydantic import ValidationError
+from pydantic import ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 
 class Settings(BaseSettings):
@@ -16,6 +18,14 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     data_dir: str = "./data"
+
+    @field_validator("log_level")
+    @classmethod
+    def _normalize_log_level(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized not in LOG_LEVELS:
+            raise ValueError("must be one of " + ", ".join(LOG_LEVELS))
+        return normalized
 
     @property
     def admins(self) -> frozenset[str]:
@@ -34,7 +44,20 @@ def load_settings() -> Settings:
     try:
         return Settings()
     except ValidationError as exc:
-        missing = [str(error["loc"][0]).upper() for error in exc.errors() if error["loc"]]
-        raise SystemExit(
-            "Missing required environment variables: " + ", ".join(missing)
-        )
+        missing = []
+        invalid = []
+        for error in exc.errors():
+            if not error["loc"]:
+                continue
+            name = str(error["loc"][0]).upper()
+            if error["type"] == "missing":
+                missing.append(name)
+            else:
+                invalid.append(f"{name} ({error['msg']})")
+
+        problems = []
+        if missing:
+            problems.append("Missing required environment variables: " + ", ".join(missing))
+        if invalid:
+            problems.append("Invalid environment variables: " + "; ".join(invalid))
+        raise SystemExit(" ".join(problems) if problems else str(exc))

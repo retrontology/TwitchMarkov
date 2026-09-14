@@ -230,3 +230,26 @@ async def test_logout_clears_session_cookie(client, app):
     assert logout_response.json() == {"ok": True}
 
     assert (await client.get("/api/me")).status_code == 401
+
+
+async def test_callback_without_code_is_rejected(client, monkeypatch):
+    """A valid state with no ``code`` must be rejected before the exchange:
+    UserAuthenticator.authenticate(user_token=None) would otherwise spin up a
+    local webserver and never return."""
+    patch_happy_path(monkeypatch)
+    exchanged: list = []
+
+    async def recording_exchange_code(app_twitch, scopes, redirect_url, code):
+        exchanged.append(code)
+        return ("tok", "ref")
+
+    monkeypatch.setattr("twitchmarkov.web.routers.auth.exchange_code", recording_exchange_code)
+
+    login_response = await client.get("/auth/login?next=/")
+    state = state_from_location(login_response.headers["location"])
+
+    response = await client.get(f"/auth/callback?state={state}")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Missing code"
+    assert exchanged == []

@@ -155,6 +155,11 @@ async def callback(
     if scopes is None:
         return _error_response(f"Unknown auth purpose: {purpose}")
 
+    if not code:
+        # Without a code, exchange_code() would call authenticate(user_token=None),
+        # which starts UserAuthenticator's own local webserver and never returns.
+        return _error_response("Missing code")
+
     app_twitch = request.app.state.app_twitch
     try:
         token, refresh = await exchange_code(app_twitch, scopes, settings.redirect_url, code)

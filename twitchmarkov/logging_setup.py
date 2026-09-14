@@ -27,7 +27,7 @@ def configure(level: str, data_dir: str) -> None:
     file_handler.setFormatter(formatter)
 
     root = logging.getLogger()
-    root.setLevel(level)
+    root.setLevel(level.upper())
     root.addHandler(stream_handler)
     root.addHandler(file_handler)
 
