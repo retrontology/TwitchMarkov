@@ -115,7 +115,10 @@ class BotManager:
                     await repo.set_bot_account_valid(session, False)
                 self.state = "invalid_token"
                 self.error = str(exc)
-                await twitch.close()
+                try:
+                    await twitch.close()
+                except Exception:
+                    logger.warning("Error closing twitch client after auth failure")
                 return
 
             chat = await self.chat_factory(twitch, asyncio.get_running_loop())
@@ -158,8 +161,8 @@ class BotManager:
         if self.chat is not None:
             try:
                 await asyncio.to_thread(self.chat.stop)
-            except RuntimeError:
-                pass
+            except Exception:
+                logger.exception("Error stopping chat client")
             self.chat = None
         if self.twitch is not None:
             try:

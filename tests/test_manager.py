@@ -95,6 +95,7 @@ def make_manager(
     *,
     fail_auth: bool = False,
     fail_start: bool = False,
+    fail_close: bool = False,
 ) -> tuple[BotManager, list[FakeTwitch], list[FakeChat]]:
     twitches: list[FakeTwitch] = []
     chats: list[FakeChat] = []
@@ -102,6 +103,7 @@ def make_manager(
     def twitch_factory(client_id, client_secret):
         async def make():
             t = FakeTwitch(client_id, client_secret, fail_auth=fail_auth)
+            t.fail_close = fail_close
             twitches.append(t)
             return t
 
@@ -202,6 +204,23 @@ async def test_auth_failure_marks_invalid_token_and_persists(
     async with session_factory() as session:
         account = await repo.get_bot_account(session)
     assert account.valid is False
+
+
+async def test_auth_failure_stays_invalid_token_even_if_close_also_fails(
+    settings, session_factory, defaults_row
+):
+    async with session_factory() as session:
+        await make_channel(session, id="1", login="chan1")
+    await seed_account(session_factory)
+
+    manager, twitches, chats = make_manager(
+        settings, session_factory, fail_auth=True, fail_close=True
+    )
+    await manager.start()
+
+    assert manager.state == "invalid_token"
+    assert "bad token" in manager.error
+    assert manager.twitch is None
 
 
 async def test_add_channel_after_connect_joins_room(settings, session_factory, defaults_row):
