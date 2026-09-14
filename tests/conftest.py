@@ -1,3 +1,4 @@
+import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -5,6 +6,7 @@ from twitchmarkov.db import repo
 from twitchmarkov.db.engine import make_engine, make_session_factory
 from twitchmarkov.db.models import Base, Channel, ChannelDefaults
 from twitchmarkov.settings import Settings
+from twitchmarkov.web.app import create_app
 
 
 @pytest.fixture
@@ -65,3 +67,48 @@ async def make_channel(session: AsyncSession, id: str = "1", login: str = "chan"
     return await repo.create_channel(
         session, id=id, login=login, display_name=login, added_by="test"
     )
+
+
+class FakeBot:
+    """Test double for bot.manager.BotManager: records lifecycle calls instead of
+    touching Twitch. Extended by later tasks as the web layer needs more of it."""
+
+    def __init__(self) -> None:
+        self.state = "connected"
+        self.calls: list[tuple] = []
+
+    async def start(self) -> None:
+        self.calls.append(("start",))
+
+    async def stop(self) -> None:
+        self.calls.append(("stop",))
+
+    async def restart(self) -> None:
+        self.calls.append(("restart",))
+
+    def status(self) -> dict:
+        return {"state": self.state, "login": "botuser", "joined": [], "error": None}
+
+
+async def fake_app_twitch(*args):
+    """Stand-in app_twitch_factory that skips the real Twitch app-auth handshake."""
+    return None
+
+
+@pytest.fixture
+def app(settings: Settings, session_factory: async_sessionmaker[AsyncSession]):
+    return create_app(
+        settings,
+        session_factory=session_factory,
+        bot=FakeBot(),
+        app_twitch_factory=fake_app_twitch,
+        run_migrations=False,
+    )
+
+
+@pytest.fixture
+async def client(app):
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
