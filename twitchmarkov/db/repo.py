@@ -149,6 +149,13 @@ async def create_channel(
     return channel
 
 
+async def set_channel_enabled(session: AsyncSession, channel_id: str, enabled: bool) -> None:
+    channel = await session.get(Channel, channel_id)
+    if channel is not None:
+        channel.enabled = enabled
+        await session.commit()
+
+
 async def delete_channel(session: AsyncSession, channel_id: str) -> None:
     channel = await session.get(Channel, channel_id)
     if channel is not None:

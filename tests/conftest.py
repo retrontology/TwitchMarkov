@@ -2,6 +2,7 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from twitchmarkov.bot.types import RuntimeStats
 from twitchmarkov.db import repo
 from twitchmarkov.db.engine import make_engine, make_session_factory
 from twitchmarkov.db.models import Base, Channel, ChannelDefaults
@@ -70,13 +71,37 @@ async def make_channel(session: AsyncSession, id: str = "1", login: str = "chan"
     )
 
 
+class FakeRuntime:
+    """Test double for bot.runtime.ChannelRuntime: ``generate`` returns a
+    canned result recorded on the owning FakeBot; ``wipe`` really deletes
+    messages (via the shared test session_factory) so tests can assert the
+    corpus emptied."""
+
+    def __init__(self, bot: "FakeBot", channel_id: str, session_factory) -> None:
+        self.bot = bot
+        self.channel_id = channel_id
+        self.session_factory = session_factory
+
+    async def generate(self, *, target=None, send=None, trigger: str = "api") -> str | None:
+        self.bot.calls.append(("generate", self.channel_id, send, trigger))
+        return self.bot.generate_result
+
+    async def wipe(self) -> None:
+        async with self.session_factory() as session:
+            await repo.delete_messages(session, self.channel_id)
+        self.bot.calls.append(("wipe", self.channel_id))
+
+
 class FakeBot:
     """Test double for bot.manager.BotManager: records lifecycle calls instead of
     touching Twitch. Extended by later tasks as the web layer needs more of it."""
 
-    def __init__(self) -> None:
+    def __init__(self, session_factory=None) -> None:
         self.state = "connected"
         self.calls: list[tuple] = []
+        self.session_factory = session_factory
+        self.runtimes: dict[str, FakeRuntime] = {}
+        self.generate_result: str | None = "generated text"
 
     async def start(self) -> None:
         self.calls.append(("start",))
@@ -86,6 +111,34 @@ class FakeBot:
 
     async def restart(self) -> None:
         self.calls.append(("restart",))
+
+    async def add_channel(self, channel_id: str) -> None:
+        self.calls.append(("add_channel", channel_id))
+
+    async def remove_channel(self, channel_id: str) -> None:
+        self.calls.append(("remove_channel", channel_id))
+
+    async def reload_channel(self, channel_id: str) -> None:
+        self.calls.append(("reload_channel", channel_id))
+
+    async def set_channel_enabled(self, channel_id: str, enabled: bool) -> None:
+        self.calls.append(("set_channel_enabled", channel_id, enabled))
+
+    def runtime(self, channel_id: str) -> FakeRuntime | None:
+        return self.runtimes.get(channel_id)
+
+    async def channel_stats(self, channel_id: str) -> RuntimeStats:
+        if channel_id not in self.runtimes:
+            raise KeyError(channel_id)
+        return RuntimeStats(
+            channel_id=channel_id,
+            joined=True,
+            messages_since_generate=3,
+            corpus_size=10,
+            last_generated=None,
+            last_generated_at=None,
+            last_cull_at=None,
+        )
 
     def status(self) -> dict:
         return {"state": self.state, "login": "botuser", "joined": [], "error": None}
@@ -101,7 +154,7 @@ def app(settings: Settings, session_factory: async_sessionmaker[AsyncSession]):
     return create_app(
         settings,
         session_factory=session_factory,
-        bot=FakeBot(),
+        bot=FakeBot(session_factory),
         app_twitch_factory=fake_app_twitch,
         run_migrations=False,
     )
