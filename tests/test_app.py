@@ -27,6 +27,14 @@ async def test_index_serves_html(client):
     assert response.headers["content-type"].startswith("text/html")
 
 
+async def test_index_references_app_js_and_style_css(client):
+    response = await client.get("/")
+    assert response.status_code == 200
+    body = response.text
+    assert "/static/app.js" in body
+    assert "/static/style.css" in body
+
+
 async def test_commands_serves_html(client):
     response = await client.get("/commands")
     assert response.status_code == 200
@@ -36,6 +44,24 @@ async def test_commands_serves_html(client):
 async def test_static_mount_serves_assets(client):
     response = await client.get("/static/style.css")
     assert response.status_code == 200
+
+
+async def test_static_app_js_served_with_js_content_type(client):
+    response = await client.get("/static/app.js")
+    assert response.status_code == 200
+    assert "javascript" in response.headers["content-type"]
+
+
+async def test_static_style_css_served_with_css_content_type(client):
+    response = await client.get("/static/style.css")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/css")
+
+
+async def test_commands_page_content_type(client):
+    response = await client.get("/commands")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
 
 
 async def test_lifespan_starts_and_stops_bot(settings, session_factory):
