@@ -209,8 +209,11 @@
     return form;
   }
 
+  let blacklistFormCount = 0;
+
   function blacklistForm(initial, onSubmit) {
-    const textarea = h("textarea", { class: "textarea mono", rows: "6", value: initial.join("\n") });
+    const fieldId = `blacklist-patterns-${blacklistFormCount++}`;
+    const textarea = h("textarea", { id: fieldId, class: "textarea mono", rows: "6", value: initial.join("\n") });
     const submitBtn = h("button", { class: "btn btn-primary", type: "submit" }, "Save blacklist");
     return h(
       "form",
@@ -231,6 +234,7 @@
           }
         },
       },
+      h("label", { class: "field-label", for: fieldId }, "Blacklist patterns"),
       h("p", { class: "field-help" }, "One pattern per line. Messages matching any pattern are ignored."),
       textarea,
       h("div", { class: "form-actions" }, submitBtn)
@@ -268,7 +272,7 @@
       // Best-effort: still send the user back to a logged-out view below.
     }
     location.hash = "#/";
-    renderRoute();
+    location.reload();
   }
 
   function Header(me) {
@@ -362,9 +366,14 @@
         {
           class: "row-link",
           tabindex: "0",
+          role: "link",
+          "aria-label": `${c.display_name} (@${c.login})`,
           onclick: go,
           onkeydown: (ev) => {
-            if (ev.key === "Enter") go();
+            if (ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar") {
+              ev.preventDefault();
+              go();
+            }
           },
         },
         h("td", {}, h("div", { class: "cell-name" }, c.display_name), h("div", { class: "cell-login" }, "@" + c.login)),
