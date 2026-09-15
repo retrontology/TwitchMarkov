@@ -102,3 +102,15 @@ def test_configure_accepts_lower_case_level_and_installs_one_file_handler(tmp_pa
                 root.removeHandler(handler)
                 handler.close()
         root.setLevel(saved_level)
+
+
+def test_default_port_and_public_url_agree():
+    settings = Settings(
+        twitch_client_id="id",
+        twitch_client_secret="sec",
+        twitchmarkov_admins="a",
+        _env_file=None,
+    )
+    assert settings.port == 8477
+    assert settings.public_url == "http://localhost:8477"
+    assert settings.redirect_url == "http://localhost:8477/auth/callback"

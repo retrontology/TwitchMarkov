@@ -87,12 +87,12 @@ Deleted at the end: `twitchMarkov.py`, `markovHandler.py`, `paths.py`, `config.y
 |---|---|---|
 | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | yes | Twitch app credentials |
 | `TWITCHMARKOV_ADMINS` | yes | comma-separated Twitch logins, case-insensitive |
-| `PUBLIC_URL` | no | `http://localhost:8000`; OAuth redirect base and `!commands` link |
+| `PUBLIC_URL` | no | `http://localhost:8477`; OAuth redirect base and `!commands` link |
 | `DATABASE_URL` | no | `sqlite+aiosqlite:///./data/twitchmarkov.db`; Docker image sets `sqlite+aiosqlite:////data/twitchmarkov.db`; MySQL: `mysql+aiomysql://user:pass@host:3306/twitchmarkov` |
 | `SESSION_SECRET` | no | if unset, generated once and stored in `app_settings` |
 | `ALLOW_SELF_SERVICE` | no | `false`; lets broadcasters add/remove their own channel |
 | `LOG_LEVEL` | no | `INFO` |
-| `HOST`, `PORT` | no | `0.0.0.0`, `8000` |
+| `HOST`, `PORT` | no | `0.0.0.0`, `8477` |
 | `DATA_DIR` | no | `./data`; log files go to `DATA_DIR/logs/` |
 
 Twitch dev console must have redirect URL `PUBLIC_URL/auth/callback` registered.
@@ -128,7 +128,7 @@ UI: vanilla JS hash router. Views: login, channel list, channel detail, admin. P
 
 ### Docker
 
-Image runs `python -m twitchmarkov`, port 8000, uid 1000, `./data:/data` bind mount. Compose adds a `mariadb` service under profile `mysql`. No entrypoint script; the app validates env at startup and exits with a clear message.
+Image runs `python -m twitchmarkov`, port 8477, uid 1000, `./data:/data` bind mount. Compose adds a `mariadb` service under profile `mysql`. No entrypoint script; the app validates env at startup and exits with a clear message.
 
 ### Errors and testing
 
@@ -164,13 +164,13 @@ class Settings(BaseSettings):
     twitch_client_id: str
     twitch_client_secret: str
     twitchmarkov_admins: str            # raw
-    public_url: str = "http://localhost:8000"
+    public_url: str = "http://localhost:8477"
     database_url: str = "sqlite+aiosqlite:///./data/twitchmarkov.db"
     session_secret: str | None = None
     allow_self_service: bool = False
     log_level: str = "INFO"
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8477
     data_dir: str = "./data"
     @property
     def admins(self) -> frozenset[str]: ...   # lowercased, stripped, empty removed
@@ -497,8 +497,8 @@ Vanilla JS, no dependencies, hash router (`#/`, `#/channels/:id`, `#/admin`). A 
 - Modify: `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `.gitignore`, `README.md`
 - Delete: `twitchMarkov.py`, `markovHandler.py`, `paths.py`, `config.yaml`, `blacklist.txt`, `html/`, `docker-entrypoint.sh`, `requirements.txt`
 
-- [ ] Dockerfile: `python:3.12-slim`, builder stage `pip install .` into `/opt/venv`, runtime stage copies venv + `twitchmarkov/` + `alembic.ini`, `USER bot` (uid 1000), `ENV DATABASE_URL=sqlite+aiosqlite:////data/twitchmarkov.db DATA_DIR=/data`, `EXPOSE 8000`, `CMD ["python","-m","twitchmarkov"]`.
-- [ ] compose: `twitchmarkov` service with `ports: ["8000:8000"]`, `env_file: .env`, `./data:/data` bind mount (keep the existing comment about bind mounts), restart `unless-stopped`; `mariadb` service (`mariadb:11`, profile `mysql`, `./data/mariadb:/var/lib/mysql`, env `MARIADB_DATABASE=twitchmarkov` etc.); `.env.example` with every variable from the table and a commented MySQL `DATABASE_URL`.
+- [ ] Dockerfile: `python:3.12-slim`, builder stage `pip install .` into `/opt/venv`, runtime stage copies venv + `twitchmarkov/` + `alembic.ini`, `USER bot` (uid 1000), `ENV DATABASE_URL=sqlite+aiosqlite:////data/twitchmarkov.db DATA_DIR=/data`, `EXPOSE 8477`, `CMD ["python","-m","twitchmarkov"]`.
+- [ ] compose: `twitchmarkov` service with `ports: ["8477:8477"]`, `env_file: .env`, `./data:/data` bind mount (keep the existing comment about bind mounts), restart `unless-stopped`; `mariadb` service (`mariadb:11`, profile `mysql`, `./data/mariadb:/var/lib/mysql`, env `MARIADB_DATABASE=twitchmarkov` etc.); `.env.example` with every variable from the table and a commented MySQL `DATABASE_URL`.
 - [ ] Delete legacy files; `.gitignore` adds `.env`, keeps `data/`.
 - [ ] README: what it is, Twitch app setup (redirect URL), `.env`, `docker compose up -d`, first login as admin, connect bot account, add channel; MySQL profile; running without Docker (`pip install -e .[test]`, `python -m twitchmarkov`); env table; chat commands; testing (`pytest`).
 - [ ] `docker compose build` succeeds; `docker compose up` with a missing `TWITCH_CLIENT_ID` exits with the readable message; with a valid `.env` the container serves `/healthz` and the UI.
@@ -520,7 +520,7 @@ Vanilla JS, no dependencies, hash router (`#/`, `#/channels/:id`, `#/admin`). A 
 ## Verification summary
 
 - `pytest` green after every task; the suite never contacts Twitch.
-- `docker compose build && docker compose up -d` then `curl localhost:8000/healthz`.
+- `docker compose build && docker compose up -d` then `curl localhost:8477/healthz`.
 - Task 15 checklist for live behaviour. Anything on that list not exercised is reported as unverified, not implied.
 
 ## Follow-ups (not in this plan)

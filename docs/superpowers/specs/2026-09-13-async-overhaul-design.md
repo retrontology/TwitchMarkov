@@ -87,12 +87,12 @@ Deleted at the end: `twitchMarkov.py`, `markovHandler.py`, `paths.py`, `config.y
 |---|---|---|
 | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | yes | Twitch app credentials |
 | `TWITCHMARKOV_ADMINS` | yes | comma-separated Twitch logins, case-insensitive |
-| `PUBLIC_URL` | no | `http://localhost:8000`; OAuth redirect base and `!commands` link |
+| `PUBLIC_URL` | no | `http://localhost:8477`; OAuth redirect base and `!commands` link |
 | `DATABASE_URL` | no | `sqlite+aiosqlite:///./data/twitchmarkov.db`; Docker image sets `sqlite+aiosqlite:////data/twitchmarkov.db`; MySQL: `mysql+aiomysql://user:pass@host:3306/twitchmarkov` |
 | `SESSION_SECRET` | no | if unset, generated once and stored in `app_settings` |
 | `ALLOW_SELF_SERVICE` | no | `false`; lets broadcasters add/remove their own channel |
 | `LOG_LEVEL` | no | `INFO` |
-| `HOST`, `PORT` | no | `0.0.0.0`, `8000` |
+| `HOST`, `PORT` | no | `0.0.0.0`, `8477` |
 | `DATA_DIR` | no | `./data`; log files go to `DATA_DIR/logs/` |
 
 Twitch dev console must have redirect URL `PUBLIC_URL/auth/callback` registered.
@@ -128,7 +128,7 @@ UI: vanilla JS hash router. Views: login, channel list, channel detail, admin. P
 
 ### Docker
 
-Image runs `python -m twitchmarkov`, port 8000, uid 1000, `./data:/data` bind mount. Compose adds a `mariadb` service under profile `mysql`. No entrypoint script; the app validates env at startup and exits with a clear message.
+Image runs `python -m twitchmarkov`, port 8477, uid 1000, `./data:/data` bind mount. Compose adds a `mariadb` service under profile `mysql`. No entrypoint script; the app validates env at startup and exits with a clear message.
 
 ### Errors and testing
 

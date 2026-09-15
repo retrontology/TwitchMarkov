@@ -39,6 +39,6 @@ COPY --chown=root:root alembic.ini ./alembic.ini
 
 USER bot
 
-EXPOSE 8000
+EXPOSE 8477
 
 CMD ["python", "-m", "twitchmarkov"]

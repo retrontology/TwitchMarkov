@@ -10,13 +10,13 @@ class Settings(BaseSettings):
     twitch_client_id: str
     twitch_client_secret: str
     twitchmarkov_admins: str  # raw, comma-separated
-    public_url: str = "http://localhost:8000"
+    public_url: str = "http://localhost:8477"
     database_url: str = "sqlite+aiosqlite:///./data/twitchmarkov.db"
     session_secret: str | None = None
     allow_self_service: bool = False
     log_level: str = "INFO"
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8477
     data_dir: str = "./data"
 
     @field_validator("log_level")

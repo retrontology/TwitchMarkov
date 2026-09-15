@@ -13,7 +13,7 @@ repository started as a fork.
 1. Create an application at the [Twitch developer
    console](https://dev.twitch.tv/console/apps).
 2. Set its **OAuth Redirect URL** to `PUBLIC_URL/auth/callback`, e.g.
-   `http://localhost:8000/auth/callback` for a local/default setup, or
+   `http://localhost:8477/auth/callback` for a local/default setup, or
    `https://markov.example.com/auth/callback` if you're running behind a
    public hostname. This must match `PUBLIC_URL` in your `.env` exactly.
 3. Note the **Client ID** and **Client Secret** — you'll put these in `.env`.
@@ -43,7 +43,7 @@ sudo chown -R 1000:1000 ./data
 
 Then:
 
-1. Open `PUBLIC_URL` (`http://localhost:8000` by default) in a browser and
+1. Open `PUBLIC_URL` (`http://localhost:8477` by default) in a browser and
    sign in with Twitch, using a login listed in `TWITCHMARKOV_ADMINS`.
 2. Go to **Admin** and click **Connect bot account** — you'll be sent
    through Twitch OAuth again. Log into the *bot's* Twitch account for this
@@ -135,13 +135,13 @@ Compose).
 | `TWITCH_CLIENT_ID` | yes | | Twitch application client ID |
 | `TWITCH_CLIENT_SECRET` | yes | | Twitch application client secret |
 | `TWITCHMARKOV_ADMINS` | yes | | Comma-separated Twitch logins allowed to administer the bot |
-| `PUBLIC_URL` | no | `http://localhost:8000` | Base URL used to build the OAuth redirect (`PUBLIC_URL/auth/callback`) and chat links |
+| `PUBLIC_URL` | no | `http://localhost:8477` | Base URL used to build the OAuth redirect (`PUBLIC_URL/auth/callback`) and chat links |
 | `DATABASE_URL` | no | `sqlite+aiosqlite:///./data/twitchmarkov.db` | SQLAlchemy async URL. The default SQLite path is relative to the working directory the bot runs from, and is **independent of `DATA_DIR`** — it does not move if you only set `DATA_DIR`. Docker image default: `sqlite+aiosqlite:////data/twitchmarkov.db` (the image sets both `DATABASE_URL` and `DATA_DIR` to `/data`). MySQL example: `mysql+aiomysql://twitchmarkov:secret@mariadb:3306/twitchmarkov` |
 | `SESSION_SECRET` | no | generated once, stored in the DB | Signs session cookies |
 | `ALLOW_SELF_SERVICE` | no | `false` | Let non-admin broadcasters add/remove their own channel |
 | `LOG_LEVEL` | no | `INFO` | |
 | `HOST` | no | `0.0.0.0` | |
-| `PORT` | no | `8000` | |
+| `PORT` | no | `8477` | |
 | `DATA_DIR` | no | `./data` | Directory for log files (`DATA_DIR/logs/`) only — does **not** affect where the SQLite database goes; that's controlled solely by `DATABASE_URL` |
 
 See `.env.example` for a copy-pasteable template.
